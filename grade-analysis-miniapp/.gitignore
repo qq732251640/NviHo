@@ -1,7 +1,0 @@
-node_modules/
-dist/
-.swc/
-.DS_Store
-grade-mp/node_modules/
-grade-mp/dist/
-grade-mp/.swc/
