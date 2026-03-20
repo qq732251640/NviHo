@@ -26,7 +26,7 @@ export default function StudentDistribution() {
     const examName = exams.length > 0 ? exams[examIdx]?.exam_name : undefined;
     analysisApi
       .getMyDistribution(examName)
-      .then((res: any) => setDistribution(Array.isArray(res) ? res : []))
+      .then((res: any) => setDistribution(Array.isArray(res) ? [...res].reverse() : []))
       .catch(() => setDistribution([]))
       .finally(() => setLoading(false));
   }, [exams, examIdx]);

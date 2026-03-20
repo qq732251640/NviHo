@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import Taro from '@tarojs/taro';
+import Taro, { usePullDownRefresh } from '@tarojs/taro';
 import { View, Text, Picker, Input } from '@tarojs/components';
 import { gradeApi, schoolApi, analysisApi } from '../../api';
 import { useAuthStore } from '../../stores/auth';
@@ -11,13 +11,24 @@ function StudentGradesView() {
   const [subjectIdx, setSubjectIdx] = useState(-1);
   const [examIdx, setExamIdx] = useState(-1);
 
-  useEffect(() => { schoolApi.getMySubjects().then(setSubjects); analysisApi.listExams().then(setExams); }, []);
+  const loadData = () => {
+    schoolApi.getMySubjects().then(setSubjects);
+    analysisApi.listExams().then(setExams);
+    const params: any = {};
+    if (subjectIdx >= 0) params.subject_id = subjects[subjectIdx]?.id;
+    if (examIdx >= 0) params.exam_name = exams[examIdx]?.exam_name;
+    gradeApi.list(params).then(setGrades).finally(() => Taro.stopPullDownRefresh());
+  };
+
+  useEffect(() => { loadData(); }, []);
   useEffect(() => {
     const params: any = {};
     if (subjectIdx >= 0) params.subject_id = subjects[subjectIdx]?.id;
     if (examIdx >= 0) params.exam_name = exams[examIdx]?.exam_name;
     gradeApi.list(params).then(setGrades);
   }, [subjectIdx, examIdx, subjects, exams]);
+
+  usePullDownRefresh(() => { loadData(); });
 
   const handleDelete = (id: number) => {
     Taro.showModal({ title: '确认', content: '确定删除？' }).then(res => {

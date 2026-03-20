@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '成绩排名' });
+export default definePageConfig({ navigationBarTitleText: '得分率' });

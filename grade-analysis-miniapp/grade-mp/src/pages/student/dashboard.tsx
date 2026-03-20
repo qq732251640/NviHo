@@ -38,7 +38,7 @@ function StudentView() {
       <View className='card'>
         <Text className='subtitle'>快捷入口</Text>
         <View style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-          {[{ label: '排名', url: '/pages/student/ranking' }, { label: '趋势', url: '/pages/student/trends' },
+          {[{ label: '得分率', url: '/pages/student/ranking' }, { label: '趋势', url: '/pages/student/trends' },
             { label: '分布', url: '/pages/student/distribution' }, { label: '对比', url: '/pages/student/comparison' },
             { label: '预测', url: '/pages/student/prediction' }, { label: '试卷', url: '/pages/student/papers' },
           ].map(item => (
