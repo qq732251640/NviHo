@@ -29,7 +29,7 @@ const StudentUpload: React.FC = () => {
         subject_id: s.id,
         subject_name: s.name,
         score: null,
-        total_score: 100,
+        total_score: s.default_total_score || 100,
       })));
     });
   }, [user]);
@@ -54,7 +54,7 @@ const StudentUpload: React.FC = () => {
       subject_id: subj.id,
       subject_name: subj.name,
       score: null,
-      total_score: 100,
+      total_score: subj.default_total_score || 100,
     }]);
   };
 

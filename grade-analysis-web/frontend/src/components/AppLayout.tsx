@@ -22,7 +22,7 @@ const studentMenuItems = [
   { key: '/student/grades', icon: <BookOutlined />, label: '成绩查看' },
   { key: '/student/upload', icon: <UploadOutlined />, label: '成绩上传' },
   { key: '/student/analysis', icon: <FileTextOutlined />, label: '分析报告' },
-  { key: '/student/ranking', icon: <TrophyOutlined />, label: '成绩排名' },
+  { key: '/student/ranking', icon: <TrophyOutlined />, label: '得分率' },
   { key: '/student/trends', icon: <LineChartOutlined />, label: '成绩趋势' },
   { key: '/student/distribution', icon: <PieChartOutlined />, label: '成绩分布' },
   { key: '/student/comparison', icon: <SwapOutlined />, label: '成绩对比' },

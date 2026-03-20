@@ -25,7 +25,7 @@ const StudentDistribution: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     analysisApi.getMyDistribution(examName)
-      .then(res => setDistribution(res.data))
+      .then(res => setDistribution([...res.data].reverse()))
       .finally(() => setLoading(false));
   }, [examName]);
 

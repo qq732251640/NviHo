@@ -43,6 +43,7 @@ export interface Subject {
   id: number;
   name: string;
   grade_level: string;
+  default_total_score?: number;
 }
 
 export interface Grade {
