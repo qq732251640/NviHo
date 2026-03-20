@@ -1,0 +1,146 @@
+page {
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #f5f5f5;
+  font-size: 28px;
+  color: #333;
+}
+
+.container {
+  padding: 24px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.title {
+  font-size: 36px;
+  font-weight: bold;
+  margin-bottom: 24px;
+}
+
+.subtitle {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.text-secondary {
+  color: #999;
+  font-size: 24px;
+}
+
+.btn-primary {
+  background: #5b21b6;
+  color: #fff;
+  border-radius: 12px;
+  text-align: center;
+  padding: 20px 0;
+  font-size: 30px;
+  font-weight: bold;
+}
+
+.btn-primary:active {
+  opacity: 0.8;
+}
+
+.btn-outline {
+  border: 2px solid #5b21b6;
+  color: #5b21b6;
+  border-radius: 12px;
+  text-align: center;
+  padding: 18px 0;
+  font-size: 28px;
+  background: #fff;
+}
+
+.input-item {
+  margin-bottom: 24px;
+}
+
+.input-label {
+  font-size: 26px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.input-field {
+  background: #f8f8f8;
+  border-radius: 12px;
+  padding: 20px 24px;
+  font-size: 28px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+  text-overflow: ellipsis;
+  min-height: 72px;
+  line-height: 1.2;
+}
+
+.input-field input {
+  width: 100%;
+  font-size: 28px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.stat-card {
+  flex: 1;
+  min-width: 140px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.stat-value {
+  font-size: 40px;
+  font-weight: bold;
+  color: #5b21b6;
+}
+
+.stat-label {
+  font-size: 22px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.tag {
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 8px;
+  font-size: 22px;
+  margin-right: 8px;
+}
+
+.tag-green { background: #f6ffed; color: #52c41a; }
+.tag-blue { background: #e6f7ff; color: #1890ff; }
+.tag-red { background: #fff2f0; color: #ff4d4f; }
+.tag-gold { background: #fffbe6; color: #faad14; }
+.tag-purple { background: #f9f0ff; color: #722ed1; }
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.empty-text {
+  text-align: center;
+  color: #ccc;
+  padding: 80px 0;
+  font-size: 28px;
+}
