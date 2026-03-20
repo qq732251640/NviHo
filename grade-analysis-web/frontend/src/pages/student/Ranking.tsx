@@ -14,8 +14,14 @@ const StudentRanking: React.FC = () => {
   const user = useAuthStore(s => s.user);
 
   useEffect(() => {
-    schoolApi.getMySubjects().then(res => setSubjects(res.data));
-    analysisApi.listExams().then(res => setExams(res.data));
+    schoolApi.getMySubjects().then(res => {
+      setSubjects(res.data);
+      if (res.data.length > 0) setSubjectId(res.data[0].id);
+    });
+    analysisApi.listExams().then(res => {
+      setExams(res.data);
+      if (res.data.length > 0) setExamName(res.data[0].exam_name);
+    });
   }, []);
 
   useEffect(() => {

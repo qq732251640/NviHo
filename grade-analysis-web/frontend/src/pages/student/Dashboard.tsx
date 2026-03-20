@@ -41,7 +41,7 @@ const StudentDashboard: React.FC = () => {
       type: 'category' as const,
       data: [...new Set(trends.map(t => t.exam_name))],
     },
-    yAxis: { type: 'value' as const, min: 0, max: 100 },
+    yAxis: { type: 'value' as const, min: 0 },
     series: Object.entries(trendsBySubject).map(([name, data]) => ({
       name,
       type: 'line' as const,

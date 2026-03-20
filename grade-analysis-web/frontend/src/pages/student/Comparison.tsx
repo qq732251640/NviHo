@@ -11,7 +11,10 @@ const StudentComparison: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    analysisApi.listExams().then(res => setExams(res.data));
+    analysisApi.listExams().then(res => {
+      setExams(res.data);
+      if (res.data.length > 0) setExamName(res.data[0].exam_name);
+    });
   }, []);
 
   useEffect(() => {
