@@ -425,3 +425,130 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
+
+---
+
+## 常用命令速查
+
+### Mac 本地开发
+
+```bash
+# 启动后端
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 启动前端
+cd frontend
+npm run dev
+
+# 前端编译检查
+cd frontend && npx tsc --noEmit
+
+# 前端生产构建
+cd frontend && npm run build
+
+# 推送代码到 GitHub
+git add . && git commit -m "改动说明" && git push
+```
+
+### 云服务器操作
+
+```bash
+# SSH 登录
+ssh root@111.235.10.86
+
+# ---------- 代理管理（科学上网）----------
+
+# 查看当前代理
+echo $http_proxy
+
+# 临时取消代理（apt install 前执行）
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+
+# 恢复代理（apt install 后执行）
+source ~/.bashrc
+
+# ---------- 拉取最新代码 ----------
+
+cd /data/NviHo
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 pull
+
+# ---------- 后端更新 ----------
+
+# 重启后端服务
+systemctl restart grade-analysis
+
+# 查看后端状态
+systemctl status grade-analysis
+
+# 查看后端日志（实时）
+journalctl -u grade-analysis -f
+
+# 查看最近30条日志
+journalctl -u grade-analysis -n 30 --no-pager
+
+# 进入后端虚拟环境（安装依赖等）
+cd /data/grade-analysis-backend
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 初始化/重置数据库
+python seed_data.py
+python seed_regions_full.py
+
+# ---------- Web 前端更新 ----------
+
+cd /data/NviHo/grade-analysis-web/frontend
+npm install
+npx vite build
+systemctl reload nginx
+
+# ---------- Nginx 管理 ----------
+
+# 测试配置
+nginx -t
+
+# 重载配置（不中断服务）
+systemctl reload nginx
+
+# 查看配置
+cat /etc/nginx/sites-available/aipic
+
+# 编辑配置
+nano /etc/nginx/sites-available/aipic
+
+# ---------- SSL 证书 ----------
+
+# 查看证书状态
+certbot certificates
+
+# 手动续期
+certbot renew
+
+# ---------- 服务管理 ----------
+
+# 查看所有自定义服务
+systemctl list-units --type=service | grep -E 'grade|aipic|nginx'
+
+# 查看端口占用
+ss -tlnp | grep -E ':80|:443|:8000|:7861'
+
+# ---------- 完整更新流程（一键） ----------
+
+cd /data/NviHo && \
+git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 pull && \
+systemctl restart grade-analysis && \
+cd grade-analysis-web/frontend && npx vite build && \
+systemctl reload nginx && \
+echo "✅ 更新完成"
+```
+
+### 访问地址
+
+| 服务 | 地址 |
+|------|------|
+| Web 版 | https://www.xinweijia.net/app/ |
+| API 文档 | https://www.xinweijia.net/api/docs |
+| API 健康检查 | https://www.xinweijia.net/api/health |
+| 原有 aipic 服务 | https://www.xinweijia.net/ |
