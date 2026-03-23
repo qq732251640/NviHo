@@ -151,6 +151,60 @@ echo "✅ 后端更新完成"
 | request 合法域名 | https://www.xinweijia.net |
 | uploadFile 合法域名 | https://www.xinweijia.net |
 
+## Mac 远程连接 Ubuntu 可视化
+
+云服务器（`111.228.10.86`）是纯命令行环境，运行 GUI 程序需要把画面转发到 Mac。
+
+### 方式一：SSH X11 转发（轻量，适合单个 GUI 程序）
+
+```bash
+# 1. Mac 安装 XQuartz（仅首次）
+brew install --cask xquartz
+# 安装后重启 Mac
+
+# 2. 用 -Y 参数连接服务器
+ssh -Y root@111.228.10.86
+
+# 3. 在服务器上直接运行 GUI 程序，界面显示在 Mac 本地
+./CordC-2.8.3-linux-amd64.AppImage --no-sandbox
+```
+
+### 方式二：VNC 远程桌面（完整桌面环境）
+
+**Ubuntu 服务器端（仅首次配置）：**
+
+```bash
+# 安装 VNC 和桌面环境
+apt update
+apt install -y tigervnc-standalone-server tigervnc-xorg-extension
+apt install -y xfce4 xfce4-goodies   # 轻量桌面
+
+# 设置 VNC 密码
+vncpasswd
+
+# 启动 VNC（:1 对应端口 5901）
+vncserver :1 -geometry 1920x1080 -depth 24
+
+# 查看运行状态
+vncserver -list
+
+# 停止 VNC
+vncserver -kill :1
+```
+
+**Mac 本地连接：**
+
+```bash
+# 1. 建立 SSH 隧道（保持终端不关）
+ssh -L 5901:localhost:5901 root@111.228.10.86
+
+# 2. 新开终端，打开 VNC 连接
+open vnc://localhost:5901
+# 输入 vncpasswd 设置的密码即可进入远程桌面
+```
+
+---
+
 ## 注意事项
 
 - 本地开发时在微信开发者工具「详情」→「本地设置」勾选「不校验合法域名」
