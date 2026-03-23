@@ -35,9 +35,9 @@ function StudentView() {
   const rateColor = avgRate >= 90 ? '#52c41a' : avgRate >= 80 ? '#1890ff' : avgRate >= 70 ? '#faad14' : '#ff4d4f';
 
   return (
-    <View className='container' style={{ paddingBottom: '32px' }}>
+    <View style={{ paddingBottom: '32px', overflowX: 'hidden' }}>
       {/* Header Card */}
-      <View style={{ background: 'linear-gradient(135deg, #5b21b6 0%, #7c3aed 50%, #a78bfa 100%)', borderRadius: '0 0 32px 32px', padding: '32px 24px 40px', margin: '-24px -24px 24px', color: '#fff' }}>
+      <View style={{ background: 'linear-gradient(135deg, #5b21b6 0%, #7c3aed 50%, #a78bfa 100%)', borderRadius: '0 0 32px 32px', padding: '32px 24px 40px', color: '#fff' }}>
         <View style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <View>
             <Text style={{ fontSize: '36px', fontWeight: 'bold', color: '#fff', display: 'block' }}>
@@ -69,6 +69,7 @@ function StudentView() {
         </View>
       </View>
 
+      <View style={{ padding: '0 24px' }}>
       {/* Slogan */}
       <View style={{ textAlign: 'center', padding: '8px 0 20px' }}>
         <Text style={{ fontSize: '22px', color: '#999', lineHeight: '1.8' }}>
@@ -152,6 +153,7 @@ function StudentView() {
           <Text style={{ fontSize: '28px', display: 'block' }}>📄</Text>
           <Text style={{ fontSize: '22px', color: '#fa8c16', marginTop: '4px' }}>试卷分析</Text>
         </View>
+      </View>
       </View>
     </View>
   );
