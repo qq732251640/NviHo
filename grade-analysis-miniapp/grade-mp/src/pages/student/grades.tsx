@@ -40,10 +40,10 @@ function StudentGradesView() {
     <View className='container'>
       <View style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
         <Picker mode='selector' range={['全部科目', ...subjects.map(s => s.name)]} value={subjectIdx + 1} onChange={e => setSubjectIdx(Number(e.detail.value) - 1)}>
-          <View className='btn-outline' style={{ padding: '10px 16px', fontSize: '24px' }}>{subjectIdx >= 0 ? subjects[subjectIdx]?.name : '全部科目'}</View>
+          <View className='btn-outline' style={{ padding: '10px 16px', fontSize: '24px', display: 'flex', alignItems: 'center', gap: '4px' }}>{subjectIdx >= 0 ? subjects[subjectIdx]?.name : '全部科目'}<Text style={{ fontSize: '20px', color: '#999' }}> ▼</Text></View>
         </Picker>
         <Picker mode='selector' range={['全部考试', ...exams.map(e => e.exam_name)]} value={examIdx + 1} onChange={e => setExamIdx(Number(e.detail.value) - 1)}>
-          <View className='btn-outline' style={{ padding: '10px 16px', fontSize: '24px' }}>{examIdx >= 0 ? exams[examIdx]?.exam_name : '全部考试'}</View>
+          <View className='btn-outline' style={{ padding: '10px 16px', fontSize: '24px', display: 'flex', alignItems: 'center', gap: '4px' }}>{examIdx >= 0 ? exams[examIdx]?.exam_name : '全部考试'}<Text style={{ fontSize: '20px', color: '#999' }}> ▼</Text></View>
         </Picker>
       </View>
       {grades.length > 0 ? grades.map(g => (
@@ -153,7 +153,7 @@ export default function GradesPage() {
   const { user } = useAuthStore();
   return (
     <View>
-      <Text className='title' style={{ padding: '24px 24px 0' }}>{user?.role === 'teacher' ? '成绩管理' : '成绩查看'}</Text>
+      <Text className='title' style={{ padding: '24px 24px 0' }}>{user?.role === 'teacher' ? '成绩管理' : '成绩查询'}</Text>
       {user?.role === 'teacher' ? <TeacherGradesView /> : <StudentGradesView />}
     </View>
   );

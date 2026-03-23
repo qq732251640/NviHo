@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '成绩趋势' });
+export default definePageConfig({ navigationBarTitleText: '趋势预测' });

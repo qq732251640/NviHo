@@ -37,22 +37,24 @@ export default function Profile() {
   };
 
   const initFormDefaults = () => {
-    setFormGradeLevel(currentLevel || '高中');
-    setFormSchoolName(user?.school_name || '');
+    initFormDefaultsWithData(regions);
+  };
+
+  const initFormDefaultsWithData = (regionData: any[]) => {
     setProvIdx(-1);
     setCityIdx(-1);
     setDistIdx(-1);
 
-    if (regions.length > 0 && user?.region_path && user.region_path.length >= 1) {
-      const pIdx = regions.findIndex((r: any) => r.id === user.region_path![0]);
+    if (regionData.length > 0 && user?.region_path && user.region_path.length >= 1) {
+      const pIdx = regionData.findIndex((r: any) => r.id === user.region_path![0]);
       if (pIdx >= 0) {
         setProvIdx(pIdx);
         if (user.region_path.length >= 2) {
-          const cIdx = (regions[pIdx]?.children || []).findIndex((c: any) => c.id === user.region_path![1]);
+          const cIdx = (regionData[pIdx]?.children || []).findIndex((c: any) => c.id === user.region_path![1]);
           if (cIdx >= 0) {
             setCityIdx(cIdx);
             if (user.region_path.length >= 3) {
-              const dIdx = (regions[pIdx]?.children?.[cIdx]?.children || []).findIndex((d: any) => d.id === user.region_path![2]);
+              const dIdx = (regionData[pIdx]?.children?.[cIdx]?.children || []).findIndex((d: any) => d.id === user.region_path![2]);
               if (dIdx >= 0) setDistIdx(dIdx);
             }
           }
@@ -73,6 +75,14 @@ export default function Profile() {
     const city = prov?.children?.[cityIdx];
     if (distIdx < 0) return city?.id;
     return city?.children?.[distIdx]?.id || city?.id;
+  };
+
+  const getRegionPath = (): number[] => {
+    const path: number[] = [];
+    if (provIdx >= 0) path.push(regions[provIdx]?.id);
+    if (cityIdx >= 0) path.push(regions[provIdx]?.children?.[cityIdx]?.id);
+    if (distIdx >= 0) path.push(regions[provIdx]?.children?.[cityIdx]?.children?.[distIdx]?.id);
+    return path.filter(Boolean);
   };
 
   const regionLabel = () => {
@@ -104,11 +114,42 @@ export default function Profile() {
   };
 
   const openSchoolForm = () => {
-    loadRegions();
-    setTimeout(() => {
-      initFormDefaults();
-      setShowSchoolForm(true);
-    }, 300);
+    // Read cached school info, fallback to current user
+    const cached = Taro.getStorageSync('last_school_form');
+    setFormGradeLevel(currentLevel || '高中');
+    setFormSchoolName(cached?.school_name || user?.school_name || '');
+    setShowSchoolForm(true);
+
+    const regionPath = cached?.region_path || user?.region_path;
+
+    const fillDefaults = (data: any[]) => {
+      setProvIdx(-1); setCityIdx(-1); setDistIdx(-1);
+      if (data.length > 0 && regionPath && regionPath.length >= 1) {
+        const pIdx = data.findIndex((r: any) => r.id === regionPath[0]);
+        if (pIdx >= 0) {
+          setProvIdx(pIdx);
+          if (regionPath.length >= 2) {
+            const cIdx = (data[pIdx]?.children || []).findIndex((c: any) => c.id === regionPath[1]);
+            if (cIdx >= 0) {
+              setCityIdx(cIdx);
+              if (regionPath.length >= 3) {
+                const dIdx = (data[pIdx]?.children?.[cIdx]?.children || []).findIndex((d: any) => d.id === regionPath[2]);
+                if (dIdx >= 0) setDistIdx(dIdx);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    if (regions.length > 0) {
+      fillDefaults(regions);
+    } else {
+      schoolApi.getRegionTree().then((data: any[]) => {
+        setRegions(data);
+        setTimeout(() => fillDefaults(data), 100);
+      });
+    }
   };
 
   const handleSaveSchool = async () => {
@@ -129,6 +170,13 @@ export default function Profile() {
 
     setSaving(true);
     try {
+      // Cache the form values so next time we can prefill
+      const rPath = getRegionPath();
+      Taro.setStorageSync('last_school_form', {
+        school_name: formSchoolName,
+        region_path: rPath,
+      });
+
       const r = await authApi.updateSchool({
         school_name: formSchoolName,
         region_id: regionId,
@@ -137,6 +185,7 @@ export default function Profile() {
       setUser(r);
       Taro.showToast({ title: `已切换到 ${r.school_name} · ${GRADE_LEVEL_MAP[glValue]}`, icon: 'success' });
       setShowSchoolForm(false);
+      setTimeout(() => Taro.reLaunch({ url: '/pages/index/index' }), 800);
     } catch (err: any) {
       Taro.showToast({ title: err.detail || '保存失败', icon: 'none' });
     } finally {
@@ -181,9 +230,20 @@ export default function Profile() {
           <View className='input-item'>
             <Text className='input-label'>学段</Text>
             <Picker mode='selector' range={GRADE_LEVELS} value={GRADE_LEVELS.indexOf(formGradeLevel)}
-              onChange={e => setFormGradeLevel(GRADE_LEVELS[e.detail.value as number])}>
+              onChange={e => {
+                const newLevel = GRADE_LEVELS[e.detail.value as number];
+                setFormGradeLevel(newLevel);
+                if (newLevel !== currentLevel) {
+                  setFormSchoolName('');
+                }
+              }}>
               <View className='input-field'>{formGradeLevel || '请选择'}</View>
             </Picker>
+            {formGradeLevel !== currentLevel && (
+              <Text style={{ fontSize: '22px', color: '#fa8c16', marginTop: '8px', display: 'block' }}>
+                学段已变更，请确认或修改下方学校名称
+              </Text>
+            )}
           </View>
 
           <View className='input-item'>

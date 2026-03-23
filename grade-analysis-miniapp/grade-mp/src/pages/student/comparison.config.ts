@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '成绩对比' });
+export default definePageConfig({ navigationBarTitleText: '对比分布' });

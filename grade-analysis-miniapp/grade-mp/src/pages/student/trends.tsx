@@ -1,62 +1,135 @@
 import { useEffect, useState } from 'react';
 import Taro from '@tarojs/taro';
-import { View, Text, Canvas, Picker } from '@tarojs/components';
-import { analysisApi } from '../../api';
+import { View, Text, Canvas, ScrollView } from '@tarojs/components';
+import { gradeApi, analysisApi, schoolApi } from '../../api';
 
-const LINE_COLORS = ['#5b21b6', '#1890ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1', '#13c2c2', '#eb2f96', '#f5222d', '#2f54eb'];
+interface GradeItem {
+  id: number;
+  subject_name: string;
+  score: number;
+  total_score: number;
+  exam_name: string;
+  exam_date: string;
+}
 
-interface TrendItem { exam_name: string; exam_date: string; score: number; subject_name: string; }
+interface TrendItem {
+  exam_name: string;
+  exam_date: string;
+  score: number;
+  subject_name: string;
+}
+
+interface PredictionItem {
+  subject_name: string;
+  historical_scores: number[];
+  predicted_score: number;
+  exam_dates: string[];
+}
+
+interface SubjectItem {
+  id: number;
+  name: string;
+  grade_level: string;
+  default_total_score: number;
+}
 
 export default function StudentTrends() {
-  const [data, setData] = useState<TrendItem[]>([]);
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [subjectIdx, setSubjectIdx] = useState(1);
+  const [grades, setGrades] = useState<GradeItem[]>([]);
+  const [trends, setTrends] = useState<TrendItem[]>([]);
+  const [predictions, setPredictions] = useState<PredictionItem[]>([]);
+  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
+  const [selected, setSelected] = useState('total');
 
   useEffect(() => {
-    analysisApi.getTrends({}).then((res: any) => {
-      const arr: TrendItem[] = Array.isArray(res) ? res : [];
-      setData(arr);
-      const names = [...new Set(arr.map(t => t.subject_name))];
-      setSubjects(names);
-      setSubjectIdx(0);
-    }).catch(() => setData([]));
+    Promise.all([
+      gradeApi.getMyGrades(),
+      analysisApi.getTrends({}),
+      analysisApi.getPrediction(),
+      schoolApi.getMySubjects(),
+    ]).then(([g, t, p, s]: any[]) => {
+      setGrades(Array.isArray(g) ? g : []);
+      setTrends(Array.isArray(t) ? t : []);
+      setPredictions(Array.isArray(p) ? p : []);
+      setSubjects(Array.isArray(s) ? s : []);
+    }).catch(() => {});
   }, []);
 
-  const isSingle = subjectIdx > 0;
-  const selectedSubject = isSingle ? subjects[subjectIdx - 1] : '';
-  const filtered = selectedSubject ? data.filter(d => d.subject_name === selectedSubject) : data;
+  const isTotal = selected === 'total';
 
-  const subjectMap = new Map<string, TrendItem[]>();
-  filtered.forEach(item => {
-    const list = subjectMap.get(item.subject_name) || [];
-    list.push(item);
-    subjectMap.set(item.subject_name, list);
+  const examDateMap = new Map<string, string>();
+  grades.forEach(g => {
+    if (!examDateMap.has(g.exam_name)) examDateMap.set(g.exam_name, g.exam_date);
   });
-  const examNames = [...new Set(data.map(d => d.exam_name))];
+  trends.forEach(t => {
+    if (!examDateMap.has(t.exam_name)) examDateMap.set(t.exam_name, t.exam_date);
+  });
+  const sortedExams = [...examDateMap.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([name]) => name);
 
+  let chartPoints: { examName: string; score: number }[] = [];
+  if (isTotal) {
+    const totals = new Map<string, number>();
+    grades.forEach(g => totals.set(g.exam_name, (totals.get(g.exam_name) || 0) + g.score));
+    chartPoints = sortedExams
+      .filter(e => totals.has(e))
+      .map(e => ({ examName: e, score: totals.get(e)! }));
+  } else {
+    const items = trends.filter(t => t.subject_name === selected);
+    const scoreMap = new Map(items.map(t => [t.exam_name, t.score]));
+    chartPoints = sortedExams
+      .filter(e => scoreMap.has(e))
+      .map(e => ({ examName: e, score: scoreMap.get(e)! }));
+  }
+
+  let predictedScore: number | null = null;
+  if (predictions.length > 0) {
+    if (isTotal) {
+      predictedScore = predictions.reduce((sum, p) => sum + p.predicted_score, 0);
+    } else {
+      const pred = predictions.find(p => p.subject_name === selected);
+      if (pred) predictedScore = pred.predicted_score;
+    }
+  }
+
+  const scores = chartPoints.map(p => p.score);
+  const maxScore = scores.length ? Math.max(...scores) : 0;
+  const minScore = scores.length ? Math.min(...scores) : 0;
+  const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  const stdDev = scores.length > 1
+    ? Math.sqrt(scores.reduce((sum, s) => sum + (s - avgScore) ** 2, 0) / scores.length)
+    : 0;
+  const stability = scores.length > 1 && avgScore > 0
+    ? Math.min(100, Math.max(0, 100 - (stdDev / avgScore * 100)))
+    : 100;
+
+  // Canvas drawing
   useEffect(() => {
-    if (!filtered.length || !examNames.length) return;
+    if (!chartPoints.length) return;
+
     const ctx = Taro.createCanvasContext('trendCanvas');
     const W = 340, H = 220;
-    const ML = 38, MR = isSingle ? 20 : 55, MT = 20, MB = 40;
+    const ML = 42, MR = 20, MT = 28, MB = 40;
     const plotW = W - ML - MR;
     const plotH = H - MT - MB;
+
+    const allVals = scores.slice();
+    if (predictedScore !== null) allVals.push(predictedScore);
+
+    const rawMax = Math.max(...allVals);
+    const rawMin = Math.min(...allVals);
+    const range = rawMax - rawMin || 10;
+    const pad = range * 0.2;
+    const yMin = Math.max(0, Math.floor(rawMin - pad));
+    const yMax = Math.ceil(rawMax + pad);
+
+    const nPoints = chartPoints.length + (predictedScore !== null ? 1 : 0);
+    const toX = (i: number) => ML + (nPoints > 1 ? (i / (nPoints - 1)) * plotW : plotW / 2);
+    const toY = (v: number) => MT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
     ctx.setFillStyle('#fff');
     ctx.fillRect(0, 0, W, H);
 
-    const allScores = filtered.map(d => d.score);
-    const rawMax = Math.max(...allScores);
-    const rawMin = Math.min(...allScores);
-    const range = rawMax - rawMin || 10;
-    const padding = isSingle ? range * 0.3 : range * 0.15;
-    const yMin = Math.max(0, Math.floor(rawMin - padding));
-    const yMax = Math.ceil(rawMax + padding);
-
-    const toX = (i: number) => ML + (examNames.length > 1 ? (i / (examNames.length - 1)) * plotW : plotW / 2);
-    const toY = (score: number) => MT + plotH - ((score - yMin) / (yMax - yMin)) * plotH;
-
-    // Grid
     for (let i = 0; i <= 4; i++) {
       const y = MT + (plotH / 4) * i;
       ctx.setStrokeStyle('#f0f0f0');
@@ -67,130 +140,185 @@ export default function StudentTrends() {
       ctx.fillText(val.toFixed(0), ML - 4, y + 3);
     }
 
-    // Axes
     ctx.setStrokeStyle('#ddd'); ctx.setLineWidth(1);
-    ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, H - MB); ctx.lineTo(W - MR, H - MB); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ML, MT); ctx.lineTo(ML, H - MB); ctx.lineTo(W - MR, H - MB);
+    ctx.stroke();
 
-    // X labels
-    ctx.setFillStyle('#666'); ctx.setFontSize(8); ctx.setTextAlign('center');
-    examNames.forEach((name, i) => {
-      const x = toX(i);
-      const label = name.length > 6 ? name.slice(0, 6) + '..' : name;
-      ctx.fillText(label, x, H - MB + 14);
+    ctx.setFontSize(7); ctx.setTextAlign('center');
+    chartPoints.forEach((p, i) => {
+      ctx.setFillStyle('#666');
+      const label = p.examName.length > 5 ? p.examName.slice(0, 5) + '..' : p.examName;
+      ctx.fillText(label, toX(i), H - MB + 12);
     });
+    if (predictedScore !== null) {
+      ctx.setFillStyle('#faad14');
+      ctx.fillText('预测', toX(chartPoints.length), H - MB + 12);
+    }
 
-    // Lines
-    const subjectNames = [...subjectMap.keys()];
-    subjectNames.forEach((subName, si) => {
-      const color = LINE_COLORS[si % LINE_COLORS.length];
-      const items = subjectMap.get(subName) || [];
-      const points: { x: number; y: number; score: number }[] = [];
-      items.forEach(item => {
-        const idx = examNames.indexOf(item.exam_name);
-        if (idx >= 0) points.push({ x: toX(idx), y: toY(item.score), score: item.score });
-      });
-      points.sort((a, b) => a.x - b.x);
-      if (!points.length) return;
+    const mainColor = '#5b21b6';
+    ctx.setStrokeStyle(mainColor); ctx.setLineWidth(2.5);
+    ctx.beginPath();
+    chartPoints.forEach((p, i) => {
+      const x = toX(i), y = toY(p.score);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
 
-      ctx.setStrokeStyle(color); ctx.setLineWidth(isSingle ? 3 : 2);
-      ctx.beginPath();
-      points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
-      ctx.stroke();
+    chartPoints.forEach((p, i) => {
+      const x = toX(i), y = toY(p.score);
 
-      // Data points
-      points.forEach(p => {
-        ctx.beginPath(); ctx.arc(p.x, p.y, isSingle ? 4 : 3, 0, Math.PI * 2);
-        ctx.setFillStyle('#fff'); ctx.fill();
-        ctx.setStrokeStyle(color); ctx.setLineWidth(2);
-        ctx.beginPath(); ctx.arc(p.x, p.y, isSingle ? 4 : 3, 0, Math.PI * 2); ctx.stroke();
-      });
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.setFillStyle('#fff'); ctx.fill();
+      ctx.setStrokeStyle(mainColor); ctx.setLineWidth(2);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.stroke();
 
-      // Labels on points (single mode) or end label (multi mode)
-      if (isSingle) {
-        ctx.setFillStyle(color); ctx.setFontSize(9); ctx.setTextAlign('center');
-        points.forEach(p => { ctx.fillText(String(p.score), p.x, p.y - 8); });
-      } else {
-        const last = points[points.length - 1];
-        ctx.setFillStyle(color); ctx.setFontSize(8); ctx.setTextAlign('left');
-        ctx.fillText(subName, last.x + 5, last.y + 3);
+      ctx.setFillStyle(mainColor); ctx.setFontSize(9); ctx.setTextAlign('center');
+      ctx.fillText(String(p.score), x, y - 10);
+
+      if (i > 0) {
+        const diff = p.score - chartPoints[i - 1].score;
+        if (diff !== 0) {
+          ctx.setFillStyle(diff > 0 ? '#52c41a' : '#ff4d4f');
+          ctx.setFontSize(7);
+          ctx.fillText(diff > 0 ? `+${diff}` : `${diff}`, x, diff > 0 ? y - 18 : y + 16);
+        }
       }
     });
 
-    ctx.draw();
-  }, [data, subjectIdx]);
+    if (predictedScore !== null && chartPoints.length > 0) {
+      const li = chartPoints.length - 1;
+      const lx = toX(li), ly = toY(chartPoints[li].score);
+      const px = toX(chartPoints.length), py = toY(predictedScore);
 
-  // Trend calculation for single subject
-  const trendInfo = () => {
-    if (!isSingle || !selectedSubject) return null;
-    const items = data.filter(d => d.subject_name === selectedSubject).sort((a, b) => a.exam_date.localeCompare(b.exam_date));
-    if (items.length < 2) return null;
-    const first = items[0].score, last = items[items.length - 1].score;
-    const diff = last - first;
-    return { diff, direction: diff > 0 ? '上升' : diff < 0 ? '下降' : '持平', color: diff > 0 ? '#52c41a' : diff < 0 ? '#ff4d4f' : '#999' };
-  };
-  const trend = trendInfo();
+      ctx.setStrokeStyle('#faad14'); ctx.setLineWidth(2);
+      for (let seg = 0; seg < 20; seg++) {
+        const t1 = seg / 20, t2 = (seg + 0.6) / 20;
+        ctx.beginPath();
+        ctx.moveTo(lx + (px - lx) * t1, ly + (py - ly) * t1);
+        ctx.lineTo(lx + (px - lx) * t2, ly + (py - ly) * t2);
+        ctx.stroke();
+      }
+
+      ctx.setFillStyle('#faad14');
+      ctx.setFontSize(14); ctx.setTextAlign('center');
+      ctx.fillText('☆', px, py + 5);
+      ctx.setFontSize(9);
+      ctx.fillText(`预测: ${Math.round(predictedScore)}`, px, py - 10);
+    }
+
+    ctx.draw();
+  }, [grades, trends, predictions, selected]);
 
   return (
     <View className='container'>
-      <Text className='title'>成绩趋势</Text>
+      <Text className='title'>趋势预测</Text>
 
-      <Picker mode='selector' range={['全部科目（叠加）', ...subjects]} value={subjectIdx}
-        onChange={e => setSubjectIdx(Number(e.detail.value))}>
-        <View className='btn-outline' style={{ padding: '12px 20px', fontSize: '24px', display: 'inline-block', marginBottom: '16px' }}>
-          {selectedSubject || '全部科目（叠加）'}
+      <ScrollView scrollX style={{ whiteSpace: 'nowrap', marginBottom: '20px' }}>
+        <View
+          onClick={() => setSelected('total')}
+          style={{
+            display: 'inline-block',
+            padding: '8px 20px',
+            borderRadius: '20px',
+            fontSize: '24px',
+            fontWeight: 'bold',
+            marginRight: '12px',
+            background: isTotal ? '#5b21b6' : '#fff',
+            color: isTotal ? '#fff' : '#5b21b6',
+            border: '2px solid #5b21b6',
+          }}
+        >
+          <Text>总分</Text>
         </View>
-      </Picker>
+        {subjects.map(s => {
+          const active = selected === s.name;
+          return (
+            <View
+              key={s.id}
+              onClick={() => setSelected(s.name)}
+              style={{
+                display: 'inline-block',
+                padding: '8px 20px',
+                borderRadius: '20px',
+                fontSize: '24px',
+                fontWeight: active ? 'bold' : 'normal',
+                marginRight: '12px',
+                background: active ? '#5b21b6' : '#fff',
+                color: active ? '#fff' : '#5b21b6',
+                border: '2px solid #5b21b6',
+              }}
+            >
+              <Text>{s.name}</Text>
+            </View>
+          );
+        })}
+      </ScrollView>
 
-      {trend && (
-        <View style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-          <View className='stat-card' style={{ flex: 1 }}>
-            <Text className='stat-value' style={{ color: trend.color, fontSize: '36px' }}>
-              {trend.diff > 0 ? '+' : ''}{trend.diff}
-            </Text>
-            <Text className='stat-label'>{trend.direction}趋势</Text>
+      {scores.length > 0 && (
+        <View className='stat-row' style={{ marginBottom: '20px' }}>
+          <View className='stat-card'>
+            <Text className='stat-value'>{maxScore}</Text>
+            <Text className='stat-label'>{isTotal ? '最高总分' : '最高分'}</Text>
           </View>
-          <View className='stat-card' style={{ flex: 1 }}>
-            <Text className='stat-value' style={{ fontSize: '36px' }}>
-              {data.filter(d => d.subject_name === selectedSubject).slice(-1)[0]?.score}
-            </Text>
-            <Text className='stat-label'>最近成绩</Text>
+          <View className='stat-card'>
+            <Text className='stat-value'>{minScore}</Text>
+            <Text className='stat-label'>{isTotal ? '最低总分' : '最低分'}</Text>
+          </View>
+          <View className='stat-card'>
+            <Text className='stat-value'>{avgScore.toFixed(1)}</Text>
+            <Text className='stat-label'>{isTotal ? '平均总分' : '平均分'}</Text>
+          </View>
+          <View className='stat-card'>
+            <Text className='stat-value'>{stability.toFixed(1)}%</Text>
+            <Text className='stat-label'>稳定率</Text>
           </View>
         </View>
       )}
 
-      {filtered.length > 0 ? (
+      {chartPoints.length > 0 ? (
         <>
           <View className='card' style={{ padding: '16px' }}>
             <Canvas canvasId='trendCanvas' style={{ width: '680rpx', height: '440rpx' }} />
           </View>
 
-          {!isSingle && subjects.length > 1 && (
-            <View className='card' style={{ padding: '16px' }}>
-              <Text className='text-secondary' style={{ display: 'block', marginBottom: '8px' }}>点击科目查看单科趋势</Text>
-              <View style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                {subjects.map((name, i) => (
-                  <View key={name} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: '#f5f5f5' }}
-                    onClick={() => setSubjectIdx(i + 1)}>
-                    <View style={{ width: '14px', height: '14px', borderRadius: '3px', background: LINE_COLORS[i % LINE_COLORS.length] }} />
-                    <Text style={{ fontSize: '24px' }}>{name}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {sortedExams.map(examName => {
+            const examGrades = grades.filter(g => g.exam_name === examName);
+            if (!examGrades.length) return null;
 
-          {examNames.map(examName => {
-            const items = filtered.filter(d => d.exam_name === examName);
-            if (!items.length) return null;
-            return (
-              <View key={examName} className='card' style={{ padding: '16px' }}>
-                <Text style={{ fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>{examName}</Text>
-                {items.map((item, i) => (
-                  <View key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
-                    <Text style={{ color: '#666', fontSize: '24px' }}>{item.subject_name}</Text>
-                    <Text style={{ fontWeight: 'bold', color: '#5b21b6' }}>{item.score}</Text>
+            if (isTotal) {
+              const total = examGrades.reduce((s, g) => s + g.score, 0);
+              return (
+                <View key={examName} className='card'>
+                  <Text className='subtitle'>{examName}</Text>
+                  {examGrades.map((g, i) => (
+                    <View key={i} className='list-item'>
+                      <Text className='text-secondary'>{g.subject_name}</Text>
+                      <Text style={{ fontWeight: 'bold', color: '#5b21b6' }}>{g.score}</Text>
+                    </View>
+                  ))}
+                  <View style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    paddingTop: '12px', marginTop: '4px', borderTop: '2px solid #5b21b6',
+                  }}>
+                    <Text style={{ fontWeight: 'bold' }}>总分</Text>
+                    <Text style={{ fontWeight: 'bold', color: '#5b21b6', fontSize: '32px' }}>{total}</Text>
                   </View>
-                ))}
+                </View>
+              );
+            }
+
+            const item = examGrades.find(g => g.subject_name === selected);
+            if (!item) return null;
+            return (
+              <View key={examName} className='card'>
+                <View style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View>
+                    <Text style={{ fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>{examName}</Text>
+                    <Text className='text-secondary'>{item.exam_date}</Text>
+                  </View>
+                  <Text style={{ fontWeight: 'bold', color: '#5b21b6', fontSize: '40px' }}>{item.score}</Text>
+                </View>
               </View>
             );
           })}
