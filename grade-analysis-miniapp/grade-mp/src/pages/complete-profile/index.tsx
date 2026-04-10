@@ -10,7 +10,7 @@ const GRADE_LEVELS = ['小学', '初中', '高中'];
 const GRADE_LEVEL_MAP: Record<string, string> = { '小学': 'elementary', '初中': 'middle', '高中': 'high' };
 
 export default function CompleteProfile() {
-  const { user, setUser } = useAuthStore();
+  const { setUser } = useAuthStore();
 
   const [step, setStep] = useState<'role' | 'school'>('role');
   const [form, setForm] = useState({
