@@ -1,11 +1,17 @@
+import uuid
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
 from app.models.school import School
 from app.models.region import Region
-from app.schemas.auth import UserRegister, UserLogin, Token, UserOut, UserUpdateSchool
+from app.schemas.auth import (
+    UserRegister, UserLogin, WxLoginRequest, CompleteProfileRequest,
+    Token, UserOut, UserUpdateSchool,
+)
 from app.utils.auth import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
@@ -13,6 +19,9 @@ from app.utils.auth import (
 )
 
 router = APIRouter()
+settings = get_settings()
+
+WX_CODE2SESSION_URL = "https://api.weixin.qq.com/sns/jscode2session"
 
 
 def _get_region_path(db: Session, region_id: int) -> list[int]:
@@ -47,7 +56,23 @@ def _build_user_out(user: User, school: School, db: Session) -> UserOut:
         free_paper_used=user.free_paper_used or 0,
         free_class_report_used=user.free_class_report_used or 0,
         free_student_report_used=user.free_student_report_used or 0,
+        is_profile_complete=bool(getattr(user, 'is_profile_complete', 1)),
     )
+
+
+def _get_or_create_placeholder_school(db: Session) -> School:
+    """微信新用户的占位学校，完善信息时会替换"""
+    school = db.query(School).filter(School.name == "__wx_placeholder__").first()
+    if not school:
+        placeholder_region = db.query(Region).first()
+        school = School(
+            name="__wx_placeholder__",
+            region_id=placeholder_region.id if placeholder_region else 1,
+            grade_level="high",
+        )
+        db.add(school)
+        db.flush()
+    return school
 
 
 @router.post("/register", response_model=UserOut)
@@ -117,6 +142,94 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
     return Token(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/wx-login", response_model=Token)
+def wx_login(data: WxLoginRequest, db: Session = Depends(get_db)):
+    if not settings.WX_APP_ID or not settings.WX_APP_SECRET:
+        raise HTTPException(status_code=500, detail="微信登录未配置，请联系管理员")
+
+    resp = httpx.get(WX_CODE2SESSION_URL, params={
+        "appid": settings.WX_APP_ID,
+        "secret": settings.WX_APP_SECRET,
+        "js_code": data.code,
+        "grant_type": "authorization_code",
+    }, timeout=10)
+    wx_data = resp.json()
+
+    if "errcode" in wx_data and wx_data["errcode"] != 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"微信登录失败: {wx_data.get('errmsg', '未知错误')}",
+        )
+
+    openid = wx_data.get("openid")
+    if not openid:
+        raise HTTPException(status_code=400, detail="微信登录失败: 未获取到 openid")
+
+    user = db.query(User).filter(User.wx_openid == openid).first()
+    if not user:
+        placeholder_school = _get_or_create_placeholder_school(db)
+        user = User(
+            username=f"wx_{uuid.uuid4().hex[:12]}",
+            password_hash=hash_password(uuid.uuid4().hex),
+            real_name="微信用户",
+            role="student",
+            school_id=placeholder_school.id,
+            wx_openid=openid,
+            is_profile_complete=0,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    return Token(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.put("/complete-profile", response_model=UserOut)
+def complete_profile(
+    data: CompleteProfileRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if data.role == "student" and not data.student_no:
+        raise HTTPException(status_code=400, detail="学生必须填写学号")
+
+    region = db.query(Region).filter(Region.id == data.region_id).first()
+    if not region:
+        raise HTTPException(status_code=400, detail="地区不存在")
+
+    school = db.query(School).filter(
+        School.name == data.school_name,
+        School.region_id == data.region_id,
+        School.grade_level == data.grade_level,
+    ).first()
+    if not school:
+        school = School(name=data.school_name, region_id=data.region_id, grade_level=data.grade_level)
+        db.add(school)
+        db.flush()
+
+    if data.student_no:
+        existing = db.query(User).filter(
+            User.student_no == data.student_no,
+            User.school_id == school.id,
+            User.id != current_user.id,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="该学校已存在相同学号")
+
+    current_user.real_name = data.real_name
+    current_user.role = data.role
+    current_user.school_id = school.id
+    current_user.grade_name = data.grade_name
+    current_user.student_no = data.student_no
+    current_user.is_profile_complete = 1
+    db.commit()
+    db.refresh(current_user)
+
+    return _build_user_out(current_user, school, db)
 
 
 @router.get("/me", response_model=UserOut)

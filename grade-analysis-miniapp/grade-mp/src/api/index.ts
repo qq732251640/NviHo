@@ -3,6 +3,10 @@ import { request, uploadFile } from './client';
 export const authApi = {
   login: (username: string, password: string) =>
     request({ url: '/auth/login', method: 'POST', data: { username, password } }),
+  wxLogin: (code: string) =>
+    request({ url: '/auth/wx-login', method: 'POST', data: { code } }),
+  completeProfile: (data: any) =>
+    request({ url: '/auth/complete-profile', method: 'PUT', data }),
   register: (data: any) =>
     request({ url: '/auth/register', method: 'POST', data }),
   getMe: () => request({ url: '/auth/me' }),

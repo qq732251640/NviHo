@@ -535,6 +535,14 @@ systemctl list-units --type=service | grep -E 'grade|aipic|nginx'
 ss -tlnp | grep -E ':80|:443|:8000|:7861'
 
 # ---------- 完整更新流程（一键） ----------
+npm run build:weapp
+一次性编译，改完代码要手动再执行
+npm run dev:weapp
+监听模式，保存文件后自动重新编译，微信开发者工具也会自动刷新
+本地手动编译
+cd "/Users/haoyingwei/郝英伟/github_nviho/NviHo/grade-analysis-miniapp/grade-mp" && npm run build:weapp
+
+
 
 cd /data/NviHo && \
 git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 pull && \

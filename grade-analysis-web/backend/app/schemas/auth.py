@@ -20,6 +20,20 @@ class UserLogin(BaseModel):
     password: str
 
 
+class WxLoginRequest(BaseModel):
+    code: str
+
+
+class CompleteProfileRequest(BaseModel):
+    real_name: str
+    role: str  # student / teacher
+    school_name: str
+    region_id: int
+    grade_level: str  # elementary / middle / high
+    grade_name: Optional[str] = None
+    student_no: Optional[str] = None
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: str
@@ -51,6 +65,7 @@ class UserOut(BaseModel):
     free_paper_used: int = 0
     free_class_report_used: int = 0
     free_student_report_used: int = 0
+    is_profile_complete: bool = True
 
     class Config:
         from_attributes = True

@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     GEMINI_API_KEY: str = ""
     UPLOAD_DIR: str = "uploads"
+    WX_APP_ID: str = "wx2deb2bd0b6291890"
+    WX_APP_SECRET: str = "ec217bc1acff68ec1ee5caf6369007ae"
 
     class Config:
         env_file = ".env"

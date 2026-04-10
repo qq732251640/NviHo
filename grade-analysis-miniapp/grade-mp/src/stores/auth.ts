@@ -19,6 +19,7 @@ interface User {
   free_student_report_used?: number;
   region_id?: number;
   region_path?: number[];
+  is_profile_complete?: boolean;
 }
 
 interface AuthState {
@@ -26,11 +27,19 @@ interface AuthState {
   loading: boolean;
   setUser: (user: User | null) => void;
   login: (username: string, password: string) => Promise<void>;
+  wxLogin: () => Promise<{ needsProfile: boolean }>;
   logout: () => void;
   fetchUser: () => Promise<void>;
+  isProfileComplete: () => boolean;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export function checkProfileComplete(user: User | null): boolean {
+  if (!user) return false;
+  if (user.is_profile_complete !== undefined) return user.is_profile_complete;
+  return !!(user.school_name && user.school_id && user.role && user.grade_level);
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
 
@@ -41,6 +50,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     Taro.setStorageSync('access_token', res.access_token);
     const me = await authApi.getMe();
     set({ user: me });
+  },
+
+  wxLogin: async () => {
+    const { code } = await Taro.login();
+    const res = await authApi.wxLogin(code);
+    Taro.setStorageSync('access_token', res.access_token);
+    const me = await authApi.getMe();
+    set({ user: me });
+    return { needsProfile: !checkProfileComplete(me) };
   },
 
   logout: () => {
@@ -63,4 +81,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: null, loading: false });
     }
   },
+
+  isProfileComplete: () => checkProfileComplete(get().user),
 }));

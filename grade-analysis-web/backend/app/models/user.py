@@ -20,6 +20,8 @@ class User(Base):
     free_class_report_used = Column(Integer, default=0)
     free_student_report_used = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
+    wx_openid = Column(String(100), unique=True, nullable=True, index=True)
+    is_profile_complete = Column(Integer, default=1)
 
     school = relationship("School", back_populates="users")
     grades = relationship("Grade", back_populates="student", foreign_keys="Grade.student_id")
