@@ -544,10 +544,12 @@ cd "/Users/haoyingwei/郝英伟/github_nviho/NviHo/grade-analysis-miniapp/grade-
 
 
 
+# 服务器上执行（你之前的部署命令 + 安装新依赖 httpx）
 cd /data/NviHo && \
 git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 pull && \
+cd grade-analysis-web/backend && pip install httpx && \
 systemctl restart grade-analysis && \
-cd grade-analysis-web/frontend && npx vite build && \
+cd ../frontend && npx vite build && \
 systemctl reload nginx && \
 echo "✅ 更新完成"
 ```
