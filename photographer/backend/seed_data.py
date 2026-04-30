@@ -176,20 +176,11 @@ DEMO_PACKAGES_TPL = {
     ],
 }
 
-# 占位作品图(unsplash CDN,演示用,生产请上传到京东云 OSS)
+# 占位作品图(picsum.photos 国内稳定,演示用)
+# 生产环境运营会通过后台上传到京东云 OSS,替换这些占位图
 DEMO_IMAGES = [
-    "https://images.unsplash.com/photo-1519741497674-611481863552?w=900",
-    "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=900",
-    "https://images.unsplash.com/photo-1606800052052-a08af7148866?w=900",
-    "https://images.unsplash.com/photo-1525258947406-9a4e9bc7d527?w=900",
-    "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=900",
-    "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=900",
-    "https://images.unsplash.com/photo-1542665952-14513db15293?w=900",
-    "https://images.unsplash.com/photo-1438162281437-a32d3a3aa75e?w=900",
-    "https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?w=900",
-    "https://images.unsplash.com/photo-1591604466107-ec97de577aff?w=900",
-    "https://images.unsplash.com/photo-1525772764200-be829a350797?w=900",
-    "https://images.unsplash.com/photo-1530268729831-4b0b9e170218?w=900",
+    f"https://picsum.photos/seed/photographer{i}/900/1200"
+    for i in range(1, 21)
 ]
 
 

@@ -7,6 +7,11 @@ const BASE_URL =
     ? 'https://www.xinweijia.net/api/pm'
     : 'http://localhost:8001/api/pm';
 
+console.log(
+  `%c[API] ${process.env.NODE_ENV} 模式 -> ${BASE_URL}`,
+  'background: #1a1a1a; color: #c89b6a; padding: 2px 6px; border-radius: 3px;'
+);
+
 interface RequestOptions {
   url: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
