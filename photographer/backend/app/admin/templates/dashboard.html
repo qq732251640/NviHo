@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% set active = "dashboard" %}
+{% block title %}摄影师管理{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-title">
+    摄影师管理
+    <div class="actions">
+      <a href="/admin/photographers/new" class="btn btn-accent">+ 新增摄影师</a>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a class="tab {% if status == 'all' %}active{% endif %}" href="/admin/">全部 <span class="count">{{ counts.all }}</span></a>
+    <a class="tab {% if status == 'pending' %}active{% endif %}" href="/admin/?status=pending">待审核 <span class="count">{{ counts.pending }}</span></a>
+    <a class="tab {% if status == 'approved' %}active{% endif %}" href="/admin/?status=approved">已上架 <span class="count">{{ counts.approved }}</span></a>
+    <a class="tab {% if status == 'frozen' %}active{% endif %}" href="/admin/?status=frozen">已下架 <span class="count">{{ counts.frozen }}</span></a>
+  </div>
+
+  <form method="get" action="/admin/" class="mb-16">
+    {% if status and status != 'all' %}
+      <input type="hidden" name="status" value="{{ status }}">
+    {% endif %}
+    <div class="form-row">
+      <div class="form-group" style="max-width: 320px;">
+        <input type="text" name="keyword" value="{{ keyword }}" placeholder="搜索摄影师昵称">
+      </div>
+      <div>
+        <button class="btn btn-primary" type="submit">搜索</button>
+      </div>
+    </div>
+  </form>
+
+  {% if rows %}
+  <div class="pgr-grid">
+    {% for p in rows %}
+    <a class="pgr-card" href="/admin/photographers/{{ p.id }}">
+      <div class="cover" style="background-image: url('{{ p.cover_image or p.avatar or '' }}')"></div>
+      <div class="info">
+        <div class="name">
+          <span>{{ p.nickname }}</span>
+          {% if p.starting_price %}
+            <span class="price">{{ p.starting_price | price }}</span>
+          {% endif %}
+        </div>
+        <div class="meta">
+          <span class="status-badge status-{{ p.status }}">
+            {% if p.status == 'approved' %}已上架{% elif p.status == 'pending' %}待审核{% elif p.status == 'frozen' %}已下架{% else %}{{ p.status }}{% endif %}
+          </span>
+          · {{ p.completed_orders or 0 }} 单 · ⭐{{ '%.1f'|format(p.avg_rating or 5) }}
+        </div>
+        {% if p.categories %}
+        <div class="tags">
+          {% for c in p.categories %}<span>{{ c.name }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">还没有摄影师,点右上角「新增摄影师」开始录入</div>
+  {% endif %}
+</div>
+{% endblock %}

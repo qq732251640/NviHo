@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>登录 · 摄影师后台</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+      color: #fff;
+    }
+    .login-box {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 40px;
+      border-radius: 12px;
+      width: 360px;
+    }
+    .brand {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .sub {
+      text-align: center;
+      color: rgba(255,255,255,0.5);
+      font-size: 13px;
+      margin-bottom: 32px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      box-sizing: border-box;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #c89b6a;
+    }
+    .submit {
+      width: 100%;
+      padding: 12px;
+      background: #c89b6a;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .submit:hover { background: #b88a5b; }
+    .error {
+      background: rgba(217,48,37,0.15);
+      border: 1px solid rgba(217,48,37,0.3);
+      color: #ff8b80;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .hint {
+      margin-top: 16px;
+      text-align: center;
+      color: rgba(255,255,255,0.35);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <form class="login-box" method="post" action="/admin/login">
+    <div class="brand">📷 摄影师后台</div>
+    <div class="sub">运营管理 · 太原</div>
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+    <div class="form-group">
+      <label>用户名</label>
+      <input type="text" name="username" required autofocus value="admin">
+    </div>
+    <div class="form-group">
+      <label>密码</label>
+      <input type="password" name="password" required value="admin">
+    </div>
+    <button type="submit" class="submit">登录</button>
+    <div class="hint">默认账号: admin / admin (生产环境请修改)</div>
+  </form>
+</body>
+</html>

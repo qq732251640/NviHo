@@ -1,0 +1,134 @@
+.order-detail {
+  padding-bottom: 200px;
+}
+
+.loading {
+  text-align: center;
+  padding: 200px 0;
+  color: var(--color-text-tertiary);
+}
+
+.status-card {
+  background: var(--color-bg-dark);
+  color: #fff;
+  padding: 48px 32px;
+
+  .status {
+    font-size: 44px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .order-no {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+}
+
+.card {
+  background: #fff;
+  margin-top: 16px;
+  padding: 24px 32px;
+  display: flex;
+  flex-wrap: wrap;
+
+  .avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 12px;
+    background: #f0f0f0;
+    margin-right: 24px;
+  }
+
+  .info {
+    flex: 1;
+
+    .name {
+      display: block;
+      font-size: 30px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .pkg {
+      display: block;
+      font-size: 26px;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+    }
+    .desc {
+      display: block;
+      font-size: 22px;
+      color: var(--color-text-tertiary);
+    }
+  }
+
+  .row {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 16px 0;
+    border-top: 1px solid var(--color-border);
+
+    &:first-child {
+      border-top: none;
+    }
+
+    .label {
+      color: var(--color-text-secondary);
+      font-size: 26px;
+      flex-shrink: 0;
+      margin-right: 16px;
+    }
+
+    .value {
+      flex: 1;
+      text-align: right;
+      font-size: 26px;
+    }
+    .value.price {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--color-warn);
+    }
+    .value.sub {
+      color: var(--color-text-tertiary);
+    }
+  }
+}
+
+.action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  gap: 24px;
+  background: #fff;
+  border-top: 1px solid var(--color-border);
+  padding: 16px 24px;
+
+  .btn-ghost {
+    flex: 1;
+    height: 88px;
+    border-radius: 44px;
+    background: transparent;
+    border: 2px solid var(--color-border);
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+  }
+  .btn-cta {
+    flex: 1.5;
+    height: 88px;
+    border-radius: 44px;
+    background: var(--color-accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: 600;
+  }
+}

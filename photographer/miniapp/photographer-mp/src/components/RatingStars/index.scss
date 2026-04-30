@@ -1,0 +1,32 @@
+.rating-stars {
+  display: inline-flex;
+  align-items: center;
+  font-size: 24px;
+  line-height: 1;
+
+  .star {
+    margin-right: 2px;
+    &.full {
+      color: var(--color-accent);
+    }
+    &.half {
+      color: var(--color-accent);
+      opacity: 0.5;
+    }
+    &.empty {
+      color: #e0e0e0;
+    }
+  }
+
+  .rating-value {
+    margin-left: 8px;
+    color: var(--color-text);
+    font-weight: 600;
+  }
+
+  .rating-count {
+    margin-left: 4px;
+    color: var(--color-text-tertiary);
+    font-size: 22px;
+  }
+}

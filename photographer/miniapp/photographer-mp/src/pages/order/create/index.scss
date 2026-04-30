@@ -1,0 +1,135 @@
+.create-order {
+  padding-bottom: 200px;
+}
+
+.loading {
+  text-align: center;
+  padding: 200px 0;
+  color: var(--color-text-tertiary);
+}
+
+.card {
+  background: #fff;
+  margin-top: 16px;
+  padding: 24px 32px;
+
+  .card-title {
+    font-size: 26px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 16px;
+  }
+
+  .card-body {
+    font-size: 30px;
+    color: var(--color-text);
+  }
+}
+
+.pkg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  border-top: 1px solid var(--color-border);
+
+  &:first-of-type {
+    border-top: none;
+  }
+
+  .pkg-name {
+    font-size: 28px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .pkg-meta {
+    font-size: 22px;
+    color: var(--color-text-secondary);
+  }
+  .pkg-price {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--color-warn);
+  }
+
+  &.active {
+    .pkg-name {
+      color: var(--color-accent);
+    }
+  }
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 30px;
+
+  .picker-arrow {
+    color: var(--color-text-tertiary);
+    font-size: 36px;
+    line-height: 1;
+  }
+}
+
+.warn-row {
+  margin-top: 8px;
+  font-size: 22px;
+  color: var(--color-warn);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  font-size: 28px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.textarea {
+  min-height: 160px;
+  border-bottom: none;
+}
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-top: 1px solid var(--color-border);
+  padding: 16px 24px;
+
+  .amount {
+    flex: 1;
+    font-size: 26px;
+    color: var(--color-text-secondary);
+
+    .price {
+      color: var(--color-warn);
+      font-weight: 700;
+      font-size: 36px;
+      margin-left: 12px;
+    }
+  }
+
+  .submit-btn {
+    width: 280px;
+    height: 88px;
+    border-radius: 44px;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 30px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

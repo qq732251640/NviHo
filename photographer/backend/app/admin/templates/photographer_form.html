@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'new' %}新增摄影师{% else %}编辑资料{% endif %}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-title">
+    <span>{% if mode == 'new' %}新增摄影师{% else %}编辑资料{% endif %}</span>
+    <div class="actions">
+      <a href="/admin/" class="btn">返回列表</a>
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="flash error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post"
+        action="{% if mode == 'new' %}/admin/photographers/new{% else %}/admin/photographers/{{ pgr.id }}/edit{% endif %}"
+        enctype="multipart/form-data">
+
+    <div class="form-row">
+      {% if mode == 'new' %}
+      <div class="form-group">
+        <label>登录用户名 *</label>
+        <input type="text" name="username" required value="{{ form.username if form else '' }}" placeholder="如:luming_zhao">
+        <div class="hint">英文/拼音,唯一,默认密码 123456,告知摄影师后他可自行登录小程序修改</div>
+      </div>
+      {% endif %}
+      <div class="form-group">
+        <label>艺名 / 昵称 *</label>
+        <input type="text" name="nickname" required value="{{ (form.nickname if form else '') or (pgr.nickname if pgr else '') }}" placeholder="如:路明摄影">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>头像</label>
+        <input type="file" name="avatar_file" accept="image/*" onchange="previewImage(this, 'avatar-preview')">
+        <div class="file-preview">
+          {% if pgr and pgr.avatar %}<img src="{{ pgr.avatar }}" id="avatar-preview-cur">{% endif %}
+          <img id="avatar-preview" style="display:none">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>封面图(列表卡片大图)</label>
+        <input type="file" name="cover_file" accept="image/*" onchange="previewImage(this, 'cover-preview')">
+        <div class="file-preview">
+          {% if pgr and pgr.cover_image %}<img src="{{ pgr.cover_image }}" id="cover-preview-cur">{% endif %}
+          <img id="cover-preview" style="display:none">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>简介</label>
+      <textarea name="intro" placeholder="介绍风格、经验、擅长场景">{{ (form.intro if form else '') or (pgr.intro if pgr else '') }}</textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>联系电话 *</label>
+        <input type="text" name="contact_phone" required value="{{ (form.contact_phone if form else '') or (pgr.contact_phone if pgr else '') }}">
+        <div class="hint">仅平台内部存,订单成交后才释放给用户</div>
+      </div>
+      <div class="form-group">
+        <label>微信号</label>
+        <input type="text" name="contact_wechat" value="{{ (form.contact_wechat if form else '') or (pgr.contact_wechat if pgr else '') }}">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>从业年限</label>
+        <input type="number" name="years_of_experience" min="0" value="{{ (form.years_of_experience if form else None) or (pgr.years_of_experience if pgr else 1) }}">
+      </div>
+      <div class="form-group">
+        <label>基地城市</label>
+        <input type="text" name="base_city" value="{{ (form.base_city if form else '') or (pgr.base_city if pgr else '太原') }}">
+      </div>
+      <div class="form-group">
+        <label>接单半径(km)</label>
+        <input type="number" name="service_radius_km" min="0" value="{{ (form.service_radius_km if form else None) or (pgr.service_radius_km if pgr else 50) }}">
+      </div>
+      <div class="form-group">
+        <label>周边加价(元)</label>
+        <input type="number" name="service_extra_fee" min="0" value="{{ (form.service_extra_fee if form else None) or (pgr.service_extra_fee if pgr else 200) }}">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>外部作品集链接(可选)</label>
+      <input type="text" name="external_portfolio_url" placeholder="时光盒子 / 小红书 / 公众号链接,在小程序详情页底部展示" value="{{ (form.external_portfolio_url if form else '') or (pgr.external_portfolio_url if pgr else '') }}">
+    </div>
+
+    <div class="form-group">
+      <label>擅长品类</label>
+      <div class="checkbox-group">
+        {% for c in categories %}
+        <label>
+          <input type="checkbox" name="category_ids" value="{{ c.id }}"
+                 {% if c.id in selected_category_ids %}checked{% endif %}>
+          <span>{{ c.icon }} {{ c.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if mode == 'new' %}
+    <div class="form-group">
+      <label>
+        <input type="checkbox" name="auto_approve" checked>
+        创建后立即上架(取消勾选则进入「待审核」)
+      </label>
+    </div>
+    {% endif %}
+
+    <div class="form-row mt-24">
+      <button type="submit" class="btn btn-accent">{% if mode == 'new' %}创建并进入详情{% else %}保存{% endif %}</button>
+      <a href="{% if mode == 'edit' and pgr %}/admin/photographers/{{ pgr.id }}{% else %}/admin/{% endif %}" class="btn">取消</a>
+    </div>
+  </form>
+</div>
+
+<script>
+function previewImage(input, previewId) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const img = document.getElementById(previewId);
+  img.src = URL.createObjectURL(file);
+  img.style.display = 'block';
+  const cur = document.getElementById(previewId + '-cur');
+  if (cur) cur.style.display = 'none';
+}
+</script>
+{% endblock %}

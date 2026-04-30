@@ -1,0 +1,30 @@
+.work-card {
+  background: var(--color-bg-dark);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 32px;
+
+  .work-image {
+    width: 100%;
+    height: 700px;
+    background: #2a2a2a;
+  }
+
+  .meta {
+    padding: 24px 28px 32px;
+    color: #fff;
+  }
+
+  .shoot-date {
+    font-size: 32px;
+    font-weight: 500;
+    color: #fff;
+  }
+
+  .category-tag {
+    margin-top: 12px;
+    display: inline-block;
+    font-size: 24px;
+    color: #b8b8b8;
+  }
+}
