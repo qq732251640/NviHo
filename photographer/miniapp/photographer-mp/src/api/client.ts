@@ -1,14 +1,19 @@
 import Taro from '@tarojs/taro';
 
-// 开发: 模拟器走 localhost,真机调试需改成 Mac 局域网 IP(如 http://192.168.1.100:8001/api/pm)
-// 生产: 服务器部署后走 xinweijia.net
+// ============ 后端地址切换 ============
+// dev 模式时, 想连本地 Mac 8001 -> 把 USE_LOCAL_IN_DEV 改成 true
+// dev 模式时, 想连云服务器 -> 保持 false
+// 生产 build (npm run build:weapp) 永远走云服务器, 不受这个开关影响
+const USE_LOCAL_IN_DEV = false;
+// =====================================
+
 const BASE_URL =
-  process.env.NODE_ENV === 'production'
+  process.env.NODE_ENV === 'production' || !USE_LOCAL_IN_DEV
     ? 'https://www.xinweijia.net/api/pm'
     : 'http://localhost:8001/api/pm';
 
 console.log(
-  `%c[API] ${process.env.NODE_ENV} 模式 -> ${BASE_URL}`,
+  `%c[API] ${process.env.NODE_ENV} -> ${BASE_URL}`,
   'background: #1a1a1a; color: #c89b6a; padding: 2px 6px; border-radius: 3px;'
 );
 
