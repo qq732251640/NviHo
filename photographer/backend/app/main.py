@@ -50,7 +50,7 @@ app.add_middleware(
 
 UPLOAD_DIR = Path(__file__).resolve().parents[1] / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+app.mount("/pm-uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="pm-uploads")
 
 app.include_router(auth.router, prefix="/api/pm/auth", tags=["认证"])
 app.include_router(categories.router, prefix="/api/pm/categories", tags=["品类字典"])

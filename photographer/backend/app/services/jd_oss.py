@@ -57,7 +57,7 @@ def gen_presigned_put(object_key: str, content_type: str = "image/jpeg") -> dict
         }
 
     upload_url = f"/api/pm/uploads/local/{object_key}"
-    public_url = f"/uploads/{object_key}"
+    public_url = f"/pm-uploads/{object_key}"
     return {
         "upload_url": upload_url,
         "public_url": public_url,

@@ -113,7 +113,7 @@ async def _save_uploaded(
     target = LOCAL_UPLOAD_ROOT / object_key
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(contents)
-    return f"/uploads/{object_key}"
+    return f"/pm-uploads/{object_key}"
 
 
 def _refresh_starting_price(db: Session, pgr: Photographer) -> None:

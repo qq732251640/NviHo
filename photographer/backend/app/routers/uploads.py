@@ -35,7 +35,7 @@ async def local_put(object_key: str, request: Request):
     target = LOCAL_UPLOAD_ROOT / object_key
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(raw)
-    return {"ok": True, "size": len(raw), "url": f"/uploads/{object_key}"}
+    return {"ok": True, "size": len(raw), "url": f"/pm-uploads/{object_key}"}
 
 
 @router.post("/direct", response_model=UploadSignResponse)
@@ -52,7 +52,7 @@ async def upload_direct(
     target.write_bytes(contents)
     return UploadSignResponse(
         upload_url="",
-        public_url=f"/uploads/{object_key}",
+        public_url=f"/pm-uploads/{object_key}",
         object_key=object_key,
         mode="direct_local",
     )
