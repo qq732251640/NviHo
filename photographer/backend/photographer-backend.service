@@ -1,0 +1,17 @@
+[Unit]
+Description=Photographer Booking Backend (FastAPI on port 8001)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/data/NviHo/photographer/backend
+Environment="PATH=/data/NviHo/photographer/backend/venv/bin"
+ExecStart=/data/NviHo/photographer/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
