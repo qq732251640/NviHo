@@ -402,8 +402,18 @@ def cancel_order(
     now = datetime.utcnow()
 
     if o.status == OrderStatus.PENDING_PAY.value:
+        # 还没付钱, 直接置为已取消, 无需退款
         o.status = OrderStatus.CANCELLED.value
         o.cancelled_at = now
+        db.commit()
+        db.refresh(o)
+        return _to_detail(o, current_user)
+
+    if o.status == OrderStatus.PENDING_CONFIRM.value:
+        # 已支付但摄影师还未接单, 用户可无损取消, 平台原路退款
+        o.status = OrderStatus.REFUNDED.value
+        o.cancelled_at = now
+        # TODO: 触发微信支付退款 API, 当前只标记状态
         db.commit()
         db.refresh(o)
         return _to_detail(o, current_user)
@@ -412,10 +422,10 @@ def cancel_order(
         cutoff = datetime.combine(o.shoot_date, datetime.min.time()) - timedelta(hours=48)
         if now > cutoff:
             raise HTTPException(status_code=400, detail="拍摄前 48 小时内不可取消")
-        o.status = OrderStatus.USER_CANCELLED.value
-        o.cancelled_at = now
-        # TODO: 触发微信支付退款,这里只标记状态
+        # 摄影师已接单, 距拍摄日 >48h, 用户取消并退款
         o.status = OrderStatus.REFUNDED.value
+        o.cancelled_at = now
+        # TODO: 触发微信支付退款 API, 当前只标记状态
         db.commit()
         db.refresh(o)
         return _to_detail(o, current_user)

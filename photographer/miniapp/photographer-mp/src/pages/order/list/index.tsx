@@ -5,8 +5,11 @@ import { Image, Text, View } from '@tarojs/components';
 import { OrderListItem } from '@/types';
 import { fmtPrice, resolveImageUrl } from '@/api/client';
 import { listOrders } from '@/api/orders';
+import { useUserStore } from '@/stores/user';
 import Empty from '@/components/Empty';
 import './index.scss';
+
+type OrdersRole = 'buyer' | 'photographer';
 
 const STATUS_TABS: { key: string; label: string; statuses: string[] }[] = [
   { key: 'all', label: '全部', statuses: [] },
@@ -41,18 +44,19 @@ const PHOTOGRAPHER_STATUS_TABS: { key: string; label: string; statuses: string[]
 
 export default function OrderListPage() {
   const router = useRouter();
-  const role = (router.params.role === 'photographer' ? 'photographer' : 'buyer') as
-    | 'buyer'
-    | 'photographer';
+  const { user } = useUserStore();
+  const initialRole: OrdersRole =
+    router.params.role === 'photographer' ? 'photographer' : 'buyer';
 
+  const [role, setRole] = useState<OrdersRole>(initialRole);
   const [tab, setTab] = useState('all');
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const load = async (r: OrdersRole) => {
     setLoading(true);
     try {
-      const res = await listOrders(role);
+      const res = await listOrders(r);
       setOrders(res);
     } catch (e: any) {
       Taro.showToast({ title: e.detail || '加载失败', icon: 'none' });
@@ -62,13 +66,30 @@ export default function OrderListPage() {
   };
 
   useDidShow(() => {
-    load();
+    // tabBar 页不能带 query, 用 storage 传角色意图(profile 页跳转时写入)
+    const intent = Taro.getStorageSync('orders_role_intent') as OrdersRole | '';
+    const next: OrdersRole = intent || role;
+    if (intent) Taro.removeStorageSync('orders_role_intent');
+    setRole(next);
+    setTab('all');
+    load(next);
   });
 
   usePullDownRefresh(async () => {
-    await load();
+    await load(role);
     Taro.stopPullDownRefresh();
   });
+
+  const canSwitch =
+    !!user &&
+    (user.pm_role === 'photographer' || user.pm_role === 'both' || user.pm_role === 'admin');
+
+  const switchRole = (next: OrdersRole) => {
+    if (next === role) return;
+    setRole(next);
+    setTab('all');
+    load(next);
+  };
 
   const tabs = role === 'photographer' ? PHOTOGRAPHER_STATUS_TABS : STATUS_TABS;
   const filtered = (() => {
@@ -79,9 +100,20 @@ export default function OrderListPage() {
 
   return (
     <View className="order-list-page">
-      {role === 'photographer' && (
-        <View className="role-banner">
-          <Text>当前: 摄影师视角</Text>
+      {canSwitch && (
+        <View className="role-switch">
+          <View
+            className={`role-seg ${role === 'buyer' ? 'active' : ''}`}
+            onClick={() => switchRole('buyer')}
+          >
+            我下的单
+          </View>
+          <View
+            className={`role-seg ${role === 'photographer' ? 'active' : ''}`}
+            onClick={() => switchRole('photographer')}
+          >
+            我接的单
+          </View>
         </View>
       )}
       <View className="tabs">

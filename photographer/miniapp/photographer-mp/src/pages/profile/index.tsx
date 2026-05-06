@@ -70,7 +70,10 @@ export default function ProfilePage() {
       <View className="menu">
         <View
           className="menu-item"
-          onClick={() => Taro.switchTab({ url: '/pages/order/list/index' })}
+          onClick={() => {
+            Taro.setStorageSync('orders_role_intent', 'buyer');
+            Taro.switchTab({ url: '/pages/order/list/index' });
+          }}
         >
           <Text>📋 我的订单(下单)</Text>
           <Text className="arrow">›</Text>
@@ -78,9 +81,10 @@ export default function ProfilePage() {
         {user && (user.pm_role === 'photographer' || user.pm_role === 'both' || user.pm_role === 'admin') && (
           <View
             className="menu-item"
-            onClick={() =>
-              Taro.navigateTo({ url: '/pages/order/list/index?role=photographer' })
-            }
+            onClick={() => {
+              Taro.setStorageSync('orders_role_intent', 'photographer');
+              Taro.switchTab({ url: '/pages/order/list/index' });
+            }}
           >
             <Text>📷 我接的单(摄影师)</Text>
             <Text className="arrow">›</Text>

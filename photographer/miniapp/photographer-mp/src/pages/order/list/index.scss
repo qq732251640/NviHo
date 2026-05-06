@@ -10,6 +10,31 @@
   font-size: 24px;
 }
 
+.role-switch {
+  display: flex;
+  background: var(--color-bg-dark);
+  padding: 12px 24px;
+  gap: 12px;
+
+  .role-seg {
+    flex: 1;
+    text-align: center;
+    padding: 14px 0;
+    font-size: 26px;
+    color: rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: transparent;
+
+    &.active {
+      color: var(--color-bg-dark);
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      font-weight: 600;
+    }
+  }
+}
+
 .tabs {
   display: flex;
   background: #fff;
