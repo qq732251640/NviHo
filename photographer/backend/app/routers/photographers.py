@@ -18,13 +18,36 @@ from app.schemas.photographer import (
     ReviewOut,
     ScheduleOut,
 )
+from pydantic import BaseModel
+
+
+class FavoriteToggleResponse(BaseModel):
+    ok: bool = True
+    favorited: bool
+    message: str | None = None
 
 router = APIRouter()
+
+
+def _fav_ids_for(db: Session, user: User | None, photographer_ids: list[int]) -> set[int]:
+    """批量查询当前用户对一组摄影师的收藏关系, 返回已收藏的 id 集合。"""
+    if not user or not photographer_ids:
+        return set()
+    rows = (
+        db.query(Favorite.photographer_id)
+        .filter(
+            Favorite.user_id == user.id,
+            Favorite.photographer_id.in_(photographer_ids),
+        )
+        .all()
+    )
+    return {row[0] for row in rows}
 
 
 @router.get("", response_model=Page[PhotographerListItem])
 def list_photographers(
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
     category_id: int | None = Query(None),
     city: str | None = Query(None),
     sort_by: str = Query("hot", pattern="^(hot|rating|price_asc|price_desc|new)$"),
@@ -56,8 +79,17 @@ def list_photographers(
 
     total = q.count()
     rows = q.offset((page - 1) * page_size).limit(page_size).all()
+
+    fav_ids = _fav_ids_for(db, current_user, [r.id for r in rows])
+
+    items: list[PhotographerListItem] = []
+    for r in rows:
+        item = PhotographerListItem.model_validate(r)
+        item.is_favorited = r.id in fav_ids
+        items.append(item)
+
     return Page[PhotographerListItem](
-        items=[PhotographerListItem.model_validate(r) for r in rows],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
@@ -68,6 +100,7 @@ def list_photographers(
 def get_photographer(
     photographer_id: int,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
 ):
     pgr = (
         db.query(Photographer)
@@ -104,8 +137,21 @@ def get_photographer(
             )
         )
 
+    is_favorited = False
+    if current_user:
+        is_favorited = (
+            db.query(Favorite)
+            .filter(
+                Favorite.user_id == current_user.id,
+                Favorite.photographer_id == photographer_id,
+            )
+            .first()
+            is not None
+        )
+
     detail = PhotographerDetail.model_validate(pgr)
     detail.recent_reviews = review_outs
+    detail.is_favorited = is_favorited
     return detail
 
 
@@ -135,7 +181,7 @@ def get_photographer_schedule(
     return [ScheduleOut.model_validate(r) for r in rows]
 
 
-@router.post("/{photographer_id}/favorite", response_model=OkResponse)
+@router.post("/{photographer_id}/favorite", response_model=FavoriteToggleResponse)
 def toggle_favorite(
     photographer_id: int,
     db: Session = Depends(get_db),
@@ -155,11 +201,11 @@ def toggle_favorite(
     if fav:
         db.delete(fav)
         db.commit()
-        return OkResponse(ok=True, message="已取消收藏")
+        return FavoriteToggleResponse(favorited=False, message="已取消收藏")
 
     db.add(Favorite(user_id=current_user.id, photographer_id=photographer_id))
     db.commit()
-    return OkResponse(ok=True, message="已收藏")
+    return FavoriteToggleResponse(favorited=True, message="已收藏")
 
 
 @router.get("/me/favorites", response_model=list[PhotographerListItem])
@@ -176,4 +222,9 @@ def my_favorites(
         .order_by(desc(Favorite.created_at))
         .all()
     )
-    return [PhotographerListItem.model_validate(r) for r in rows]
+    items: list[PhotographerListItem] = []
+    for r in rows:
+        item = PhotographerListItem.model_validate(r)
+        item.is_favorited = True
+        items.append(item)
+    return items

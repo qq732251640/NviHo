@@ -20,6 +20,8 @@ export default function PhotographerDetailPage() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [worksCategory, setWorksCategory] = useState<number | null>(null);
   const [activePackageId, setActivePackageId] = useState<number | null>(null);
+  const [isFav, setIsFav] = useState(false);
+  const [favPending, setFavPending] = useState(false);
 
   const load = async () => {
     if (!id) return;
@@ -27,6 +29,7 @@ export default function PhotographerDetailPage() {
     try {
       const detail = await getPhotographer(id);
       setData(detail);
+      setIsFav(!!detail.is_favorited);
       if (detail.packages?.length) {
         setActivePackageId(detail.packages[0].id);
       }
@@ -53,11 +56,19 @@ export default function PhotographerDetailPage() {
   );
 
   const onToggleFav = async () => {
+    if (favPending) return;
+    const prev = isFav;
+    setIsFav(!prev);
+    setFavPending(true);
     try {
       const r = await toggleFavorite(id);
-      Taro.showToast({ title: r.message || '已操作', icon: 'success' });
+      setIsFav(r.favorited);
+      Taro.showToast({ title: r.message || (r.favorited ? '已收藏' : '已取消收藏'), icon: 'success' });
     } catch (e: any) {
+      setIsFav(prev);
       Taro.showToast({ title: e.detail || '请先登录', icon: 'none' });
+    } finally {
+      setFavPending(false);
     }
   };
 
@@ -235,9 +246,12 @@ export default function PhotographerDetailPage() {
       <View className="bottom-spacer" />
 
       <View className="action-bar">
-        <View className="action-ghost" onClick={onToggleFav}>
-          <Text>♡</Text>
-          <Text className="action-label">收藏</Text>
+        <View
+          className={`action-ghost fav-btn ${isFav ? 'active' : ''}`}
+          onClick={onToggleFav}
+        >
+          <Text className="fav-icon">{isFav ? '♥' : '♡'}</Text>
+          <Text className="action-label">{isFav ? '已收藏' : '收藏'}</Text>
         </View>
         <View className="action-ghost" onClick={onContact}>
           <Text>💬</Text>

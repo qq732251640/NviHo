@@ -87,6 +87,7 @@ class PhotographerListItem(BaseModel):
     starting_price: int = 0
     hot_score: float = 0.0
     categories: List[CategoryOut] = []
+    is_favorited: bool = False
 
     class Config:
         from_attributes = True
@@ -112,6 +113,7 @@ class PhotographerDetail(BaseModel):
     works: List[WorkOut] = []
     packages: List[PackageOut] = []
     recent_reviews: List[ReviewOut] = []
+    is_favorited: bool = False
 
     class Config:
         from_attributes = True

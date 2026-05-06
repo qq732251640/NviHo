@@ -59,7 +59,17 @@ export default function PhotographerListPage() {
         {items.length === 0 && !loading ? (
           <Empty />
         ) : (
-          items.map((p) => <PhotographerCard key={p.id} data={p} />)
+          items.map((p) => (
+            <PhotographerCard
+              key={p.id}
+              data={p}
+              onFavChange={(id, favorited) =>
+                setItems((arr) =>
+                  arr.map((it) => (it.id === id ? { ...it, is_favorited: favorited } : it))
+                )
+              }
+            />
+          ))
         )}
       </View>
     </View>

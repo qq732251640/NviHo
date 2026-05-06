@@ -37,7 +37,7 @@ export const getSchedule = (id: number, month: string) =>
   request<ScheduleItem[]>({ url: `/photographers/${id}/schedule?month=${month}` });
 
 export const toggleFavorite = (id: number) =>
-  request<{ ok: boolean; message?: string }>({
+  request<{ ok: boolean; favorited: boolean; message?: string }>({
     url: `/photographers/${id}/favorite`,
     method: 'POST',
   });

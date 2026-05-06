@@ -19,6 +19,7 @@ export interface PhotographerListItem {
   starting_price: number;
   hot_score?: number;
   categories: Category[];
+  is_favorited?: boolean;
 }
 
 export interface Work {
@@ -62,6 +63,7 @@ export interface PhotographerDetail extends PhotographerListItem {
   works: Work[];
   packages: Package[];
   recent_reviews: ReviewItem[];
+  is_favorited?: boolean;
 }
 
 export interface ScheduleItem {

@@ -108,7 +108,17 @@ export default function HomePage() {
         {photographers.length === 0 && !loading ? (
           <Empty text="暂无符合条件的摄影师" />
         ) : (
-          photographers.map((p) => <PhotographerCard key={p.id} data={p} />)
+          photographers.map((p) => (
+            <PhotographerCard
+              key={p.id}
+              data={p}
+              onFavChange={(id, favorited) =>
+                setPhotographers((arr) =>
+                  arr.map((it) => (it.id === id ? { ...it, is_favorited: favorited } : it))
+                )
+              }
+            />
+          ))
         )}
       </View>
     </View>

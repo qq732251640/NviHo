@@ -5,6 +5,7 @@
   margin-bottom: 24px;
 
   .cover {
+    position: relative;
     width: 100%;
     height: 380px;
     background: #f0f0f0;
@@ -12,6 +13,37 @@
     .cover-image {
       width: 100%;
       height: 100%;
+    }
+
+    .fav-badge {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease;
+
+      .fav-icon {
+        color: #fff;
+        font-size: 36px;
+        line-height: 1;
+        transition: color 0.2s ease, transform 0.2s ease;
+      }
+
+      &.active {
+        background: rgba(255, 77, 109, 0.95);
+
+        .fav-icon {
+          color: #fff;
+          transform: scale(1.1);
+        }
+      }
     }
   }
 
