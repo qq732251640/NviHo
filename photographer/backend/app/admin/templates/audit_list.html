@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% set active = "audit" %}
+{% block title %}审计日志{% endblock %}
+
+{% block head %}
+<style>
+  .audit-table { width: 100%; border-collapse: collapse; }
+  .audit-table th, .audit-table td {
+    padding: 10px 12px; text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .audit-table th { color: var(--text-tertiary); font-weight: 500; font-size: 12px; }
+  .audit-table .when {
+    color: var(--text-tertiary); font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .action-tag {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+    background: var(--bg);
+    color: var(--text-secondary);
+  }
+  .action-tag.danger { background: rgba(217,48,37,0.12); color: var(--danger); }
+  .action-tag.warn { background: rgba(255,106,61,0.15); color: var(--warn); }
+  .action-tag.success { background: rgba(43,164,74,0.12); color: var(--success); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-title">
+    审计日志
+    <div class="actions">
+      <span class="text-tertiary" style="font-size: 12px;">显示最近 500 条</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <a class="tab {% if action == '' %}active{% endif %}" href="/admin/audit/">全部</a>
+    {% for a, c in actions %}
+      <a class="tab {% if action == a %}active{% endif %}" href="/admin/audit/?action={{ a }}">{{ a }} <span class="count">{{ c }}</span></a>
+    {% endfor %}
+  </div>
+
+  {% if rows %}
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>操作人</th>
+          <th>动作</th>
+          <th>对象</th>
+          <th>摘要</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="when">{{ r.created_at | datetime }}</td>
+          <td>
+            {% if r.operator %}
+              <strong>{{ r.operator.nickname or r.operator.username }}</strong>
+              <div class="text-tertiary" style="font-size: 11px;">#{{ r.operator.id }}</div>
+            {% else %}
+              系统
+            {% endif %}
+          </td>
+          <td>
+            <span class="action-tag {% if 'refund' in r.action or 'ban' in r.action or 'penalty' in r.action %}danger{% elif 'config' in r.action or 'commission' in r.action %}warn{% elif 'settlement' in r.action or 'agreement' in r.action %}success{% endif %}">
+              {{ r.action }}
+            </span>
+          </td>
+          <td>
+            {% if r.target_type %}
+              {% if r.target_type == 'order' and r.target_id %}
+                <a href="/admin/orders/{{ r.target_id }}">订单 #{{ r.target_id }}</a>
+              {% elif r.target_type == 'photographer' and r.target_id %}
+                <a href="/admin/photographers/{{ r.target_id }}">摄影师 #{{ r.target_id }}</a>
+              {% elif r.target_type == 'user' and r.target_id %}
+                用户 #{{ r.target_id }}
+              {% else %}
+                {{ r.target_type }}{% if r.target_id %} #{{ r.target_id }}{% endif %}
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {{ r.summary or '—' }}
+            {% if r.details %}
+              <details style="margin-top: 4px; font-size: 12px;">
+                <summary style="color: var(--text-tertiary); cursor: pointer; font-size: 11px;">详情</summary>
+                <pre style="background: var(--bg); padding: 8px; border-radius: 4px; margin-top: 4px; white-space: pre-wrap; word-break: break-all; font-size: 11px;">{{ r.details }}</pre>
+              </details>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">没有审计记录</div>
+  {% endif %}
+</div>
+{% endblock %}

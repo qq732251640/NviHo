@@ -25,5 +25,5 @@ class Review(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     order = relationship("Order", back_populates="review")
-    user = relationship("User", back_populates="reviews")
+    user = relationship("User", back_populates="reviews", foreign_keys=[user_id])
     photographer = relationship("Photographer", back_populates="reviews")

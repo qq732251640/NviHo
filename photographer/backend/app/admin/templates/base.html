@@ -441,10 +441,15 @@
   <div class="navbar">
     <a href="/admin/" class="navbar-brand">📷 摄影师后台</a>
     <div class="navbar-links">
-      <a href="/admin/" class="{% if active == 'dashboard' %}active{% endif %}">数据看板</a>
-      <a href="/admin/orders/" class="{% if active == 'orders' %}active{% endif %}">订单管理</a>
-      <a href="/admin/photographers/" class="{% if active == 'photographers' %}active{% endif %}">摄影师管理</a>
-      <a href="/docs" target="_blank">API 文档</a>
+      <a href="/admin/" class="{% if active == 'dashboard' %}active{% endif %}">看板</a>
+      <a href="/admin/orders/" class="{% if active == 'orders' %}active{% endif %}">订单</a>
+      <a href="/admin/photographers/" class="{% if active == 'photographers' %}active{% endif %}">摄影师</a>
+      <a href="/admin/users/" class="{% if active == 'users' %}active{% endif %}">用户</a>
+      <a href="/admin/reviews/" class="{% if active == 'reviews' %}active{% endif %}">评价</a>
+      <a href="/admin/settlements/" class="{% if active == 'settlements' %}active{% endif %}">结算</a>
+      <a href="/admin/agreements/" class="{% if active == 'agreements' %}active{% endif %}">协议</a>
+      <a href="/admin/system/config" class="{% if active == 'system' %}active{% endif %}">配置</a>
+      <a href="/admin/audit/" class="{% if active == 'audit' %}active{% endif %}">审计</a>
     </div>
     <div class="navbar-user">
       <span class="badge">管理员</span>

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% set active = "agreements" %}
+{% block title %}协议管理{% endblock %}
+
+{% block content %}
+{% if msg %}
+  <div class="flash">{{ msg }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">
+    协议版本管理
+    <div class="actions">
+      <a href="/admin/agreements/new" class="btn btn-accent">+ 新建协议版本</a>
+    </div>
+  </div>
+  <div class="text-secondary mb-16" style="font-size: 13px;">
+    平台对外的 3 份协议:用户协议 / 摄影师入驻协议 / 服务承诺书。每份可有多个版本, 同时只有 1 个 <strong>当前版本</strong>。
+    用户接受协议时使用当前版本, 老版本保留供历史订单查阅。
+  </div>
+
+  {% for type, items in grouped.items() %}
+  <div class="card-title" style="font-size: 14px; margin-top: 16px;">{{ AGREEMENT_TYPE_LABELS.get(type, type) }}</div>
+  {% if items %}
+    <table class="pkg-table">
+      <thead>
+        <tr>
+          <th>版本</th>
+          <th>标题</th>
+          <th>生效日期</th>
+          <th>状态</th>
+          <th>更新时间</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in items %}
+        <tr>
+          <td><strong>{{ a.version }}</strong></td>
+          <td>{{ a.title }}</td>
+          <td>{{ a.effective_date | date }}</td>
+          <td>
+            {% if a.is_current %}
+              <span class="status-badge status-approved">当前生效</span>
+            {% else %}
+              <span class="text-tertiary">草稿 / 历史</span>
+            {% endif %}
+          </td>
+          <td class="text-tertiary" style="font-size: 12px;">{{ a.updated_at | datetime }}</td>
+          <td>
+            <a class="btn btn-sm" href="/admin/agreements/{{ a.id }}">编辑</a>
+            {% if not a.is_current %}
+              <form method="post" action="/admin/agreements/{{ a.id }}/activate" style="display:inline" onsubmit="return confirm('激活后, 用户和摄影师在小程序里需要重新接受此版本协议, 确定?');">
+                <button class="btn btn-sm btn-accent">设为当前</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty" style="padding: 16px 0;">还没有 {{ AGREEMENT_TYPE_LABELS.get(type, type) }} 版本</div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endblock %}

@@ -25,6 +25,8 @@ def get_current_user(
     user = db.query(User).filter(User.id == int(user_id)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+    if user.pm_role == "banned":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用")
     return user
 
 
@@ -42,7 +44,10 @@ def get_optional_user(
     user_id = payload.get("sub")
     if not user_id:
         return None
-    return db.query(User).filter(User.id == int(user_id)).first()
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user and user.pm_role == "banned":
+        return None
+    return user
 
 
 def require_photographer(current_user: User = Depends(get_current_user)) -> User:

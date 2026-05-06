@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% set active = "settlements" %}
+{% block title %}结算管理{% endblock %}
+
+{% block head %}
+<style>
+  .settle-table { width: 100%; border-collapse: collapse; }
+  .settle-table th, .settle-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .settle-table th { color: var(--text-tertiary); font-weight: 500; font-size: 12px; }
+  .settle-table .net { color: var(--success); font-weight: 700; text-align: right; }
+  .settle-table .num { text-align: right; }
+  .settle-table .deduction { color: var(--danger); }
+  .settle-status {
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  }
+  .settle-status.pending { background: rgba(255,170,0,0.15); color: #d4a008; }
+  .settle-status.approved { background: rgba(0,122,255,0.12); color: #0064d2; }
+  .settle-status.paid { background: rgba(43,164,74,0.12); color: var(--success); }
+  .settle-status.void { background: rgba(120,120,120,0.15); color: #777; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if msg %}
+  <div class="flash">{{ msg }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">生成结算单</div>
+  <div class="text-secondary mb-16" style="font-size: 13px;">
+    选择结算周期, 系统会聚合该周期内"已确认收片 / 自动确认"的订单, 减去对应周期内的退款 + 罚款,
+    生成每位摄影师一张待打款单。重复点同周期会跳过已生成的, 不会重复。
+  </div>
+  <form method="post" action="/admin/settlements/generate">
+    <div class="form-row">
+      <div class="form-group" style="max-width: 200px;">
+        <label>周期开始</label>
+        <input type="date" name="period_start" value="{{ default_period_start }}" required>
+      </div>
+      <div class="form-group" style="max-width: 200px;">
+        <label>周期结束</label>
+        <input type="date" name="period_end" value="{{ default_period_end }}" required>
+      </div>
+      <div style="align-self: flex-end;">
+        <button class="btn btn-accent" type="submit">生成结算单</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">结算单列表</div>
+  <div class="tabs">
+    <a class="tab {% if status == 'all' %}active{% endif %}" href="/admin/settlements/">全部 <span class="count">{{ counts.all }}</span></a>
+    <a class="tab {% if status == 'pending' %}active{% endif %}" href="/admin/settlements/?status=pending">待审核 <span class="count">{{ counts.pending }}</span></a>
+    <a class="tab {% if status == 'approved' %}active{% endif %}" href="/admin/settlements/?status=approved">待打款 <span class="count">{{ counts.approved }}</span></a>
+    <a class="tab {% if status == 'paid' %}active{% endif %}" href="/admin/settlements/?status=paid">已打款 <span class="count">{{ counts.paid }}</span></a>
+  </div>
+
+  {% if rows %}
+    <table class="settle-table">
+      <thead>
+        <tr>
+          <th>摄影师</th>
+          <th>周期</th>
+          <th class="num">订单</th>
+          <th class="num">营收</th>
+          <th class="num">抽佣</th>
+          <th class="num">退款</th>
+          <th class="num">罚款</th>
+          <th class="num">实得</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in rows %}
+        <tr>
+          <td>
+            <a href="/admin/photographers/{{ s.photographer_id }}">
+              {{ s.photographer.nickname if s.photographer else '#' ~ s.photographer_id }}
+            </a>
+          </td>
+          <td>
+            <div>{{ s.period_start | date }}</div>
+            <div class="text-tertiary" style="font-size: 11px;">→ {{ s.period_end | date }}</div>
+          </td>
+          <td class="num">{{ s.order_count }}</td>
+          <td class="num">{{ s.gross_amount | price }}</td>
+          <td class="num deduction">- {{ s.commission_total | price }}</td>
+          <td class="num deduction">- {{ s.refund_total | price }}</td>
+          <td class="num deduction">- {{ s.penalty_total | price }}</td>
+          <td class="net">{{ s.net_payout | price }}</td>
+          <td>
+            <span class="settle-status {{ s.status }}">{{ SETTLEMENT_STATUS_LABELS.get(s.status, s.status) }}</span>
+            {% if s.transfer_no %}
+              <div class="text-tertiary" style="font-size: 11px; font-family: monospace; margin-top: 4px;">{{ s.transfer_no }}</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.status == 'pending' %}
+              <form method="post" action="/admin/settlements/{{ s.id }}/status" style="display:inline">
+                <input type="hidden" name="status" value="approved">
+                <button class="btn btn-sm">审核通过</button>
+              </form>
+              <form method="post" action="/admin/settlements/{{ s.id }}/status" style="display:inline">
+                <input type="hidden" name="status" value="void">
+                <button class="btn btn-sm btn-danger" onclick="return confirm('作废此结算单?')">作废</button>
+              </form>
+            {% elif s.status == 'approved' %}
+              <form method="post" action="/admin/settlements/{{ s.id }}/status" style="display:inline; gap: 4px;"
+                    onsubmit="this.transfer_no.value = prompt('转账单号 (银行流水/微信商户单号):') || ''; return this.transfer_no.value !== '';">
+                <input type="hidden" name="status" value="paid">
+                <input type="hidden" name="transfer_no">
+                <button class="btn btn-sm btn-accent">标记已打款</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">还没有结算单</div>
+  {% endif %}
+</div>
+{% endblock %}

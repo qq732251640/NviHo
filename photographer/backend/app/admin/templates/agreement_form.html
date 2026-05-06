@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% set active = "agreements" %}
+{% block title %}{% if agreement %}编辑协议{% else %}新建协议{% endif %}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-title">
+    <span>{% if agreement %}编辑协议 {{ agreement.version }}{% else %}新建协议版本{% endif %}</span>
+    <div class="actions">
+      <a href="/admin/agreements/" class="btn">返回</a>
+    </div>
+  </div>
+
+  <form method="post" action="/admin/agreements/save">
+    {% if agreement %}
+      <input type="hidden" name="id" value="{{ agreement.id }}">
+    {% endif %}
+    <div class="form-row">
+      <div class="form-group">
+        <label>协议类型 *</label>
+        <select name="type" required {% if agreement %}disabled{% endif %}>
+          {% for t in AGREEMENT_TYPES %}
+            <option value="{{ t }}" {% if agreement and agreement.type == t %}selected{% endif %}>
+              {{ AGREEMENT_TYPE_LABELS.get(t, t) }}
+            </option>
+          {% endfor %}
+        </select>
+        {% if agreement %}
+          <input type="hidden" name="type" value="{{ agreement.type }}">
+        {% endif %}
+      </div>
+      <div class="form-group" style="max-width: 160px;">
+        <label>版本号 *</label>
+        <input type="text" name="version" required placeholder="如 v1.0" value="{{ agreement.version if agreement else '' }}">
+      </div>
+      <div class="form-group" style="max-width: 200px;">
+        <label>生效日期 *</label>
+        <input type="date" name="effective_date" required value="{{ agreement.effective_date if agreement else '' }}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>标题 *</label>
+      <input type="text" name="title" required placeholder="如:摄影师预约平台 用户协议" value="{{ agreement.title if agreement else '' }}">
+    </div>
+    <div class="form-group">
+      <label>正文 (Markdown) *</label>
+      <textarea name="content_md" required style="min-height: 480px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 13px;">{{ agreement.content_md if agreement else '' }}</textarea>
+      <div class="hint">支持标准 Markdown 语法; 小程序端展示时会自动渲染。</div>
+    </div>
+    <button class="btn btn-primary" type="submit">保存</button>
+    {% if agreement and not agreement.is_current %}
+      <span class="text-tertiary" style="margin-left: 16px; font-size: 12px;">保存后到列表页点「设为当前」可激活此版本。</span>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}
