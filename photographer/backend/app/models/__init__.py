@@ -9,6 +9,10 @@ from app.models.review import Review
 from app.models.payment import Payment
 from app.models.favorite import Favorite
 from app.models.penalty import Penalty
+from app.models.system_config import SystemConfig
+from app.models.settlement import Settlement
+from app.models.agreement import Agreement
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -24,4 +28,8 @@ __all__ = [
     "Payment",
     "Favorite",
     "Penalty",
+    "SystemConfig",
+    "Settlement",
+    "Agreement",
+    "AuditLog",
 ]

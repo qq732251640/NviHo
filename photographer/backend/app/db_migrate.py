@@ -17,6 +17,8 @@ SCHEMA_UPDATES: dict[str, list[tuple[str, str]]] = {
     "users": [
         ("user_agreement_version", "VARCHAR(20)"),
         ("user_agreement_accepted_at", "DATETIME"),
+        ("banned_at", "DATETIME"),
+        ("banned_reason", "VARCHAR(500)"),
     ],
     "pm_photographers": [
         ("photographer_agreement_version", "VARCHAR(20)"),
@@ -35,6 +37,12 @@ SCHEMA_UPDATES: dict[str, list[tuple[str, str]]] = {
         ("refund_amount", "INTEGER DEFAULT 0"),
         ("refund_reason", "VARCHAR(500)"),
         ("refunded_at", "DATETIME"),
+    ],
+    "pm_reviews": [
+        ("is_hidden", "INTEGER DEFAULT 0"),
+        ("hidden_reason", "VARCHAR(300)"),
+        ("hidden_by", "INTEGER"),
+        ("hidden_at", "DATETIME"),
     ],
 }
 

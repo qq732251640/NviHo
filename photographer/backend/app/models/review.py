@@ -17,6 +17,11 @@ class Review(Base):
     text = Column(Text, nullable=True)
     images = Column(Text, nullable=True, comment="JSON 字符串数组")
 
+    is_hidden = Column(Integer, default=0, comment="0=正常 1=被运营隐藏")
+    hidden_reason = Column(String(300), nullable=True)
+    hidden_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    hidden_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
 
     order = relationship("Order", back_populates="review")

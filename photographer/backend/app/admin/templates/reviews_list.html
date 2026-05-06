@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set active = "reviews" %}
+{% block title %}评价管理{% endblock %}
+
+{% block head %}
+<style>
+  .review-card {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .review-card:last-child { border: 0; }
+  .review-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .review-head img {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #f0f0f0; object-fit: cover;
+  }
+  .review-stars { color: #ffb400; font-size: 16px; letter-spacing: 1px; }
+  .review-low { color: #d93025; font-weight: 700; }
+  .review-text {
+    margin: 8px 0;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .review-meta {
+    color: var(--text-tertiary);
+    font-size: 12px;
+  }
+  .review-card.hidden {
+    background: rgba(217,48,37,0.05);
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 4px;
+  }
+  .hidden-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(217,48,37,0.12);
+    color: var(--danger);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if msg %}
+  <div class="flash">{{ msg }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">评价管理</div>
+
+  <div class="tabs">
+    <a class="tab {% if show == 'all' %}active{% endif %}" href="/admin/reviews/">全部 <span class="count">{{ counts.all }}</span></a>
+    <a class="tab {% if show == 'visible' %}active{% endif %}" href="/admin/reviews/?show=visible">显示中 <span class="count">{{ counts.visible }}</span></a>
+    <a class="tab {% if show == 'hidden' %}active{% endif %}" href="/admin/reviews/?show=hidden">已隐藏 <span class="count">{{ counts.hidden }}</span></a>
+    <a class="tab {% if show == 'low' %}active{% endif %}" href="/admin/reviews/?show=low">差评 ≤3 ⭐ <span class="count">{{ counts.low }}</span></a>
+  </div>
+
+  {% if rows %}
+    {% for r in rows %}
+    <div class="review-card {% if r.is_hidden %}hidden{% endif %}">
+      <div class="review-head">
+        <img src="{{ r.user.avatar or '' }}" onerror="this.style.background='#f0f0f0'">
+        <div>
+          <div>
+            <strong>{{ r.user.nickname or r.user.username if r.user else '—' }}</strong>
+            <span class="text-tertiary" style="margin: 0 8px; font-size: 12px;">→</span>
+            <a href="/admin/photographers/{{ r.photographer.id }}">{{ r.photographer.nickname if r.photographer else '—' }}</a>
+            <span class="review-stars {% if r.rating <= 3 %}review-low{% endif %}">
+              {% for _ in range(r.rating) %}★{% endfor %}{% for _ in range(5 - r.rating) %}☆{% endfor %}
+            </span>
+            {% if r.is_hidden %}
+              <span class="hidden-tag">已隐藏</span>
+            {% endif %}
+          </div>
+          <div class="review-meta">{{ r.created_at | datetime }} · 订单 #{{ r.order_id }}</div>
+        </div>
+        <div style="margin-left: auto;">
+          {% if r.is_hidden %}
+            <form method="post" action="/admin/reviews/{{ r.id }}/show" style="display:inline">
+              <button class="btn btn-sm">恢复显示</button>
+            </form>
+          {% else %}
+            <form method="post" action="/admin/reviews/{{ r.id }}/hide" style="display:inline; align-items:center; gap:4px;" onsubmit="this.reason.value = prompt('隐藏原因(供审计):') || ''; return this.reason.value !== '';">
+              <input type="hidden" name="reason">
+              <button class="btn btn-sm btn-danger">隐藏</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+      {% if r.text %}
+        <div class="review-text">{{ r.text }}</div>
+      {% endif %}
+      {% if r.is_hidden and r.hidden_reason %}
+        <div class="review-meta" style="color: var(--danger);">隐藏原因: {{ r.hidden_reason }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty">没有符合条件的评价</div>
+  {% endif %}
+</div>
+{% endblock %}

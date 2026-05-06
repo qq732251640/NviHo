@@ -16,15 +16,27 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings
 from app.database import get_db
+from app.models.agreement import AGREEMENT_TYPES, Agreement
+from app.models.audit_log import AuditLog
 from app.models.category import Category
 from app.models.order import Order, OrderStatus
 from app.models.package import Package
 from app.models.payment import Payment
 from app.models.penalty import PENALTY_SEVERITIES, PENALTY_TYPES, Penalty
 from app.models.photographer import Photographer
+from app.models.review import Review
+from app.models.settlement import SETTLEMENT_STATUSES, Settlement
 from app.models.user import User
 from app.models.work import Work
+from app.services.audit_service import audit_log
+from app.services.config_service import (
+    KNOWN_KEYS,
+    get_config,
+    get_known_configs,
+    set_config,
+)
 from app.services.jd_oss import make_object_key
+from app.services.settlement_service import generate_settlements
 from app.utils.security import (
     create_access_token,
     decode_token,
@@ -129,7 +141,26 @@ PENALTY_SEVERITY_LABELS = {
     "ban": "永久封禁",
 }
 
-WARNING_AUTO_FREEZE_THRESHOLD = 3   # 累计 3 次 warning 自动 frozen
+def _warning_threshold() -> int:
+    v = get_config("warning_auto_freeze_threshold", 3)
+    try:
+        return int(v)
+    except Exception:
+        return 3
+
+
+SETTLEMENT_STATUS_LABELS = {
+    "pending": "待审核",
+    "approved": "待打款",
+    "paid": "已打款",
+    "void": "已作废",
+}
+
+AGREEMENT_TYPE_LABELS = {
+    "user": "用户协议",
+    "photographer": "摄影师入驻协议",
+    "service_commitment": "服务承诺书",
+}
 
 
 templates.env.globals["ORDER_STATUS_LABELS"] = ORDER_STATUS_LABELS
@@ -137,6 +168,10 @@ templates.env.globals["PENALTY_TYPE_LABELS"] = PENALTY_TYPE_LABELS
 templates.env.globals["PENALTY_SEVERITY_LABELS"] = PENALTY_SEVERITY_LABELS
 templates.env.globals["PENALTY_TYPES"] = PENALTY_TYPES
 templates.env.globals["PENALTY_SEVERITIES"] = PENALTY_SEVERITIES
+templates.env.globals["SETTLEMENT_STATUS_LABELS"] = SETTLEMENT_STATUS_LABELS
+templates.env.globals["SETTLEMENT_STATUSES"] = SETTLEMENT_STATUSES
+templates.env.globals["AGREEMENT_TYPE_LABELS"] = AGREEMENT_TYPE_LABELS
+templates.env.globals["AGREEMENT_TYPES"] = AGREEMENT_TYPES
 
 
 # ---------- 鉴权 ----------
@@ -598,7 +633,7 @@ def photographer_detail_page(
             "penalties": penalties,
             "warning_count": warning_count,
             "fine_total": fine_total,
-            "warning_threshold": WARNING_AUTO_FREEZE_THRESHOLD,
+            "warning_threshold": _warning_threshold(),
             "recent_orders": recent_orders,
             "default_commission_rate": settings.DEFAULT_COMMISSION_RATE,
             "msg": request.query_params.get("msg"),
@@ -897,6 +932,15 @@ def set_photographer_commission(
             )
         pgr.commission_rate = rate
         msg = f"佣金率已设为 {rate * 100:.1f}%"
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="commission_change",
+        target_type="photographer",
+        target_id=pgr.id,
+        summary=f"摄影师 {pgr.nickname} 专属佣金率: {msg}",
+        details={"new_rate": pgr.commission_rate},
+    )
     db.commit()
     return RedirectResponse(
         f"/admin/photographers/{photographer_id}?msg={msg}", status_code=302
@@ -938,9 +982,10 @@ def add_penalty(
     )
     db.add(p)
 
-    # 自动联动: ban -> frozen, suspend -> frozen, warning 累积 N 次 -> frozen
+    auto_freeze = False
     if severity in ("ban", "suspend"):
         pgr.status = "frozen"
+        auto_freeze = True
     elif severity == "warning":
         warn_count = (
             db.query(func.count(Penalty.id))
@@ -951,9 +996,27 @@ def add_penalty(
             .scalar()
             or 0
         )
-        # +1 因为还没 commit
-        if warn_count + 1 >= WARNING_AUTO_FREEZE_THRESHOLD:
+        if warn_count + 1 >= _warning_threshold():
             pgr.status = "frozen"
+            auto_freeze = True
+
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="penalty",
+        target_type="photographer",
+        target_id=pgr.id,
+        summary=f"{PENALTY_TYPE_LABELS.get(type, type)} · {PENALTY_SEVERITY_LABELS.get(severity, severity)}"
+        + (f" 罚款¥{fine_amount_yuan}" if fine_amount_yuan else "")
+        + (" → 自动下架" if auto_freeze else ""),
+        details={
+            "type": type,
+            "severity": severity,
+            "fine_amount_yuan": fine_amount_yuan,
+            "order_id": order_id,
+            "notes": notes,
+        },
+    )
 
     db.commit()
     return RedirectResponse(
@@ -1204,6 +1267,21 @@ def refund_order(
 
     # TODO: 真实接通微信退款时, 在这里调 services.wxpay.refund_order(o, amount_cents)
 
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="refund",
+        target_type="order",
+        target_id=o.id,
+        summary=f"退款 ¥{amount_cents / 100:.0f} ({refund_type})",
+        details={
+            "order_no": o.order_no,
+            "amount_cents": amount_cents,
+            "refund_type": refund_type,
+            "reason": reason,
+            "remaining_refundable_after": (o.amount_total or 0) - o.refund_amount,
+        },
+    )
     db.commit()
     return RedirectResponse(
         f"/admin/orders/{order_id}?msg=已退款 ¥{amount_cents / 100:.0f}",
@@ -1296,4 +1374,595 @@ def set_package_commission(
     return RedirectResponse(
         f"/admin/photographers/{photographer_id}?msg=套餐佣金率已更新",
         status_code=302,
+    )
+
+
+# ============================================================
+# 系统配置(后台热改)
+# ============================================================
+
+@router.get("/system/config", response_class=HTMLResponse)
+def system_config_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    configs = get_known_configs(db)
+    return templates.TemplateResponse(
+        "system_config.html",
+        {
+            "request": request,
+            "user": user,
+            "configs": configs,
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@router.post("/system/config")
+async def system_config_save(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    form_data = await request.form()
+    changes = []
+    for key in list(KNOWN_KEYS):
+        raw = form_data.get(key, "")
+        raw = (raw or "").strip()
+        if raw == "":
+            continue
+        if key == "default_commission_rate":
+            try:
+                rate = float(raw)
+            except ValueError:
+                continue
+            if rate > 1:
+                rate = rate / 100.0
+            if rate < 0 or rate > 1:
+                continue
+            value = rate
+        else:
+            try:
+                value = int(raw)
+            except ValueError:
+                continue
+            if value < 0:
+                continue
+        set_config(key, value, operator_id=user.id, session=db)
+        changes.append((key, value))
+
+    if changes:
+        audit_log(
+            db,
+            operator_id=user.id,
+            action="config_change",
+            target_type="system",
+            summary=f"修改 {len(changes)} 项系统配置",
+            details={"changes": dict(changes)},
+        )
+
+    db.commit()
+    return RedirectResponse("/admin/system/config?msg=配置已保存", status_code=302)
+
+
+# ============================================================
+# 评价管理
+# ============================================================
+
+@router.get("/reviews/", response_class=HTMLResponse)
+def reviews_list(
+    request: Request,
+    rating: int | None = Query(None),
+    show: str = Query("all"),  # all/visible/hidden/low
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    q = db.query(Review).options(
+        selectinload(Review.user),
+        selectinload(Review.photographer),
+    )
+    if rating:
+        q = q.filter(Review.rating == rating)
+    if show == "visible":
+        q = q.filter(Review.is_hidden == 0)
+    elif show == "hidden":
+        q = q.filter(Review.is_hidden == 1)
+    elif show == "low":
+        q = q.filter(Review.rating <= 3)
+
+    rows = q.order_by(desc(Review.created_at)).limit(300).all()
+
+    counts = {
+        "all": db.query(func.count(Review.id)).scalar() or 0,
+        "visible": db.query(func.count(Review.id)).filter(Review.is_hidden == 0).scalar() or 0,
+        "hidden": db.query(func.count(Review.id)).filter(Review.is_hidden == 1).scalar() or 0,
+        "low": db.query(func.count(Review.id)).filter(Review.rating <= 3).scalar() or 0,
+    }
+
+    return templates.TemplateResponse(
+        "reviews_list.html",
+        {
+            "request": request,
+            "user": user,
+            "rows": rows,
+            "rating": rating,
+            "show": show,
+            "counts": counts,
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@router.post("/reviews/{review_id}/hide")
+def hide_review(
+    review_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    reason: str = Form(""),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    r = db.query(Review).filter(Review.id == review_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="评价不存在")
+    r.is_hidden = 1
+    r.hidden_reason = reason or None
+    r.hidden_by = user.id
+    r.hidden_at = datetime.utcnow()
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="review_hide",
+        target_type="review",
+        target_id=r.id,
+        summary=f"隐藏评价 (rating={r.rating})",
+        details={"reason": reason},
+    )
+    db.commit()
+    return RedirectResponse("/admin/reviews/?msg=评价已隐藏", status_code=302)
+
+
+@router.post("/reviews/{review_id}/show")
+def show_review(
+    review_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    r = db.query(Review).filter(Review.id == review_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="评价不存在")
+    r.is_hidden = 0
+    r.hidden_reason = None
+    r.hidden_at = None
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="review_show",
+        target_type="review",
+        target_id=r.id,
+        summary="恢复评价显示",
+    )
+    db.commit()
+    return RedirectResponse("/admin/reviews/?msg=评价已恢复", status_code=302)
+
+
+# ============================================================
+# 用户管理
+# ============================================================
+
+@router.get("/users/", response_class=HTMLResponse)
+def users_list(
+    request: Request,
+    role: str | None = Query(None),
+    keyword: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    q = db.query(User)
+    if role:
+        q = q.filter(User.pm_role == role)
+    if keyword:
+        like = f"%{keyword}%"
+        q = q.filter((User.username.like(like)) | (User.nickname.like(like)) | (User.pm_phone.like(like)))
+    rows = q.order_by(desc(User.created_at)).limit(300).all()
+
+    # 聚合每人订单数 / 总消费
+    user_ids = [u.id for u in rows]
+    stats: dict[int, dict] = {uid: {"orders": 0, "spent": 0} for uid in user_ids}
+    if user_ids:
+        order_rows = (
+            db.query(
+                Order.user_id,
+                func.count(Order.id).label("cnt"),
+                func.coalesce(func.sum(Order.amount_total), 0).label("spent"),
+            )
+            .filter(Order.user_id.in_(user_ids), Order.paid_at.is_not(None))
+            .group_by(Order.user_id)
+            .all()
+        )
+        for r in order_rows:
+            stats[r.user_id] = {"orders": int(r.cnt or 0), "spent": int(r.spent or 0)}
+
+    counts = {
+        "all": db.query(func.count(User.id)).scalar() or 0,
+        "user": db.query(func.count(User.id)).filter(User.pm_role == "user").scalar() or 0,
+        "photographer": db.query(func.count(User.id)).filter(User.pm_role.in_(("photographer", "both"))).scalar() or 0,
+        "admin": db.query(func.count(User.id)).filter(User.pm_role == "admin").scalar() or 0,
+        "banned": db.query(func.count(User.id)).filter(User.pm_role == "banned").scalar() or 0,
+    }
+
+    return templates.TemplateResponse(
+        "users_list.html",
+        {
+            "request": request,
+            "user": user,
+            "rows": rows,
+            "stats": stats,
+            "counts": counts,
+            "role": role or "all",
+            "keyword": keyword or "",
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@router.post("/users/{user_id}/ban")
+def ban_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    reason: str = Form(""),
+):
+    admin = _get_admin_or_none(request, db)
+    if not admin:
+        return RedirectResponse("/admin/login", status_code=302)
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if u.pm_role == "admin":
+        return RedirectResponse("/admin/users/?msg=不能拉黑管理员", status_code=302)
+    u.pm_role = "banned"
+    u.banned_at = datetime.utcnow()
+    u.banned_reason = reason or None
+    audit_log(
+        db,
+        operator_id=admin.id,
+        action="user_ban",
+        target_type="user",
+        target_id=u.id,
+        summary=f"拉黑用户 {u.nickname or u.username}",
+        details={"reason": reason},
+    )
+    db.commit()
+    return RedirectResponse("/admin/users/?msg=用户已拉黑", status_code=302)
+
+
+@router.post("/users/{user_id}/unban")
+def unban_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_admin_or_none(request, db)
+    if not admin:
+        return RedirectResponse("/admin/login", status_code=302)
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if u.pm_role != "banned":
+        return RedirectResponse("/admin/users/?msg=用户未被拉黑", status_code=302)
+    # 恢复为普通用户(若曾是摄影师, 看 photographer 关系)
+    u.pm_role = "both" if u.photographer else "user"
+    u.banned_at = None
+    u.banned_reason = None
+    audit_log(
+        db,
+        operator_id=admin.id,
+        action="user_unban",
+        target_type="user",
+        target_id=u.id,
+        summary=f"解封用户 {u.nickname or u.username}",
+    )
+    db.commit()
+    return RedirectResponse("/admin/users/?msg=用户已解封", status_code=302)
+
+
+# ============================================================
+# 结算管理
+# ============================================================
+
+@router.get("/settlements/", response_class=HTMLResponse)
+def settlements_list(
+    request: Request,
+    status: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    q = db.query(Settlement).options(selectinload(Settlement.photographer))
+    if status and status != "all":
+        q = q.filter(Settlement.status == status)
+    rows = q.order_by(desc(Settlement.created_at)).limit(300).all()
+
+    counts = {
+        "all": db.query(func.count(Settlement.id)).scalar() or 0,
+        "pending": db.query(func.count(Settlement.id)).filter(Settlement.status == "pending").scalar() or 0,
+        "approved": db.query(func.count(Settlement.id)).filter(Settlement.status == "approved").scalar() or 0,
+        "paid": db.query(func.count(Settlement.id)).filter(Settlement.status == "paid").scalar() or 0,
+    }
+
+    # 默认结算窗:上周一 ~ 上周日
+    today = date.today()
+    last_monday = today - timedelta(days=today.weekday() + 7)
+    last_sunday = last_monday + timedelta(days=6)
+
+    return templates.TemplateResponse(
+        "settlements_list.html",
+        {
+            "request": request,
+            "user": user,
+            "rows": rows,
+            "counts": counts,
+            "status": status or "all",
+            "default_period_start": last_monday.isoformat(),
+            "default_period_end": last_sunday.isoformat(),
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@router.post("/settlements/generate")
+def settlements_generate(
+    request: Request,
+    db: Session = Depends(get_db),
+    period_start: str = Form(...),
+    period_end: str = Form(...),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    try:
+        ps = datetime.strptime(period_start, "%Y-%m-%d").date()
+        pe = datetime.strptime(period_end, "%Y-%m-%d").date()
+    except ValueError:
+        return RedirectResponse("/admin/settlements/?msg=日期格式不正确", status_code=302)
+
+    new_rows = generate_settlements(db, ps, pe, operator_id=user.id)
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="settlement_generate",
+        target_type="settlement",
+        summary=f"生成 {len(new_rows)} 张结算单 ({period_start} ~ {period_end})",
+        details={"period_start": period_start, "period_end": period_end, "count": len(new_rows)},
+    )
+    db.commit()
+    return RedirectResponse(
+        f"/admin/settlements/?msg=生成 {len(new_rows)} 张结算单",
+        status_code=302,
+    )
+
+
+@router.post("/settlements/{settlement_id}/status")
+def settlement_set_status(
+    settlement_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    status: str = Form(...),
+    transfer_no: str = Form(""),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    if status not in SETTLEMENT_STATUSES:
+        raise HTTPException(status_code=400, detail="status 不合法")
+    s = db.query(Settlement).filter(Settlement.id == settlement_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="结算单不存在")
+    old = s.status
+    s.status = status
+    if status == "paid":
+        s.paid_at = datetime.utcnow()
+        s.transfer_no = (transfer_no or "").strip() or None
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="settlement_change",
+        target_type="settlement",
+        target_id=s.id,
+        summary=f"结算单 #{s.id} 状态 {old} → {status}",
+        details={"transfer_no": transfer_no, "net_payout": s.net_payout},
+    )
+    db.commit()
+    return RedirectResponse("/admin/settlements/?msg=已更新", status_code=302)
+
+
+# ============================================================
+# 协议版本管理
+# ============================================================
+
+@router.get("/agreements/", response_class=HTMLResponse)
+def agreements_list(request: Request, db: Session = Depends(get_db)):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    rows = db.query(Agreement).order_by(Agreement.type, desc(Agreement.created_at)).all()
+    grouped: dict[str, list[Agreement]] = {t: [] for t in AGREEMENT_TYPES}
+    for r in rows:
+        if r.type in grouped:
+            grouped[r.type].append(r)
+
+    return templates.TemplateResponse(
+        "agreements_list.html",
+        {
+            "request": request,
+            "user": user,
+            "grouped": grouped,
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@router.get("/agreements/new", response_class=HTMLResponse)
+def agreement_new_page(request: Request, db: Session = Depends(get_db)):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    return templates.TemplateResponse(
+        "agreement_form.html",
+        {
+            "request": request,
+            "user": user,
+            "agreement": None,
+        },
+    )
+
+
+@router.get("/agreements/{agreement_id}", response_class=HTMLResponse)
+def agreement_edit_page(agreement_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    a = db.query(Agreement).filter(Agreement.id == agreement_id).first()
+    if not a:
+        raise HTTPException(status_code=404, detail="协议不存在")
+    return templates.TemplateResponse(
+        "agreement_form.html",
+        {
+            "request": request,
+            "user": user,
+            "agreement": a,
+        },
+    )
+
+
+@router.post("/agreements/save")
+def agreement_save(
+    request: Request,
+    db: Session = Depends(get_db),
+    id: int | None = Form(None),
+    type: str = Form(...),
+    version: str = Form(...),
+    title: str = Form(...),
+    effective_date: str = Form(...),
+    content_md: str = Form(...),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    if type not in AGREEMENT_TYPES:
+        raise HTTPException(status_code=400, detail="协议类型不合法")
+    try:
+        eff = datetime.strptime(effective_date, "%Y-%m-%d").date()
+    except ValueError:
+        return RedirectResponse("/admin/agreements/?msg=生效日期格式不正确", status_code=302)
+
+    a = db.query(Agreement).filter(Agreement.id == id).first() if id else None
+    if a:
+        a.type = type
+        a.version = version
+        a.title = title
+        a.effective_date = eff
+        a.content_md = content_md
+        a.operator_id = user.id
+    else:
+        a = Agreement(
+            type=type,
+            version=version,
+            title=title,
+            effective_date=eff,
+            content_md=content_md,
+            operator_id=user.id,
+            is_current=0,
+        )
+        db.add(a)
+
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="agreement_save",
+        target_type="agreement",
+        target_id=a.id if a.id else None,
+        summary=f"保存协议 {AGREEMENT_TYPE_LABELS.get(type, type)} {version}",
+    )
+    db.commit()
+    return RedirectResponse("/admin/agreements/?msg=已保存", status_code=302)
+
+
+@router.post("/agreements/{agreement_id}/activate")
+def agreement_activate(
+    agreement_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    a = db.query(Agreement).filter(Agreement.id == agreement_id).first()
+    if not a:
+        raise HTTPException(status_code=404, detail="协议不存在")
+    # 同 type 其他设为 0
+    db.query(Agreement).filter(Agreement.type == a.type).update({"is_current": 0})
+    a.is_current = 1
+    audit_log(
+        db,
+        operator_id=user.id,
+        action="agreement_activate",
+        target_type="agreement",
+        target_id=a.id,
+        summary=f"激活协议 {AGREEMENT_TYPE_LABELS.get(a.type, a.type)} {a.version}",
+    )
+    db.commit()
+    return RedirectResponse("/admin/agreements/?msg=已激活", status_code=302)
+
+
+# ============================================================
+# 审计日志
+# ============================================================
+
+@router.get("/audit/", response_class=HTMLResponse)
+def audit_list(
+    request: Request,
+    action: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    q = db.query(AuditLog).options(selectinload(AuditLog.operator))
+    if action:
+        q = q.filter(AuditLog.action == action)
+    rows = q.order_by(desc(AuditLog.created_at)).limit(500).all()
+
+    actions = (
+        db.query(AuditLog.action, func.count(AuditLog.id))
+        .group_by(AuditLog.action)
+        .all()
+    )
+    return templates.TemplateResponse(
+        "audit_list.html",
+        {
+            "request": request,
+            "user": user,
+            "rows": rows,
+            "action": action or "",
+            "actions": [(a, c) for a, c in actions],
+        },
     )

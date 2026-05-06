@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% set active = "system" %}
+{% block title %}系统配置{% endblock %}
+
+{% block content %}
+{% if msg %}
+  <div class="flash">{{ msg }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">系统配置</div>
+  <div class="text-secondary mb-16" style="font-size: 13px;">
+    这些参数会影响平台运行时行为, 修改后<strong>立即生效</strong>, 不需要重启服务。
+    留空表示使用 .env / 默认值; 值的优先级: 后台 &gt; .env &gt; 内置默认。
+  </div>
+
+  <form method="post" action="/admin/system/config">
+    <table class="pkg-table">
+      <thead>
+        <tr>
+          <th style="width: 220px;">参数</th>
+          <th style="width: 220px;">当前生效值</th>
+          <th style="width: 220px;">新值</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in configs %}
+        <tr>
+          <td>
+            <strong>{{ c.label }}</strong>
+            <div class="text-tertiary" style="font-size: 11px; font-family: monospace;">{{ c.key }}</div>
+          </td>
+          <td>
+            {% if c.type == 'rate' %}
+              <span class="price" style="color: var(--warn); font-weight:700;">{{ (c.effective or 0) * 100 }}%</span>
+            {% else %}
+              <strong>{{ c.effective if c.effective is not none else '—' }}</strong>
+            {% endif %}
+            {% if c.current is not none %}
+              <div class="text-tertiary" style="font-size:11px; margin-top:2px;">已被运营覆盖</div>
+            {% else %}
+              <div class="text-tertiary" style="font-size:11px; margin-top:2px;">使用默认</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if c.type == 'rate' %}
+              <input type="text" name="{{ c.key }}"
+                     value="{{ c.current * 100 if c.current is not none else '' }}"
+                     placeholder="如 8 表示 8%, 留空= 用默认"
+                     style="width:100%;">
+            {% else %}
+              <input type="number" name="{{ c.key }}" min="0"
+                     value="{{ c.current if c.current is not none else '' }}"
+                     placeholder="留空= 用默认 ({{ c.fallback }})"
+                     style="width:100%;">
+            {% endif %}
+          </td>
+          <td class="text-secondary" style="font-size: 12px;">{{ c.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="mt-16">
+      <button class="btn btn-primary" type="submit">保存所有配置</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -14,9 +14,11 @@ class User(Base):
     nickname = Column(String(100), nullable=True)
     avatar = Column(String(500), nullable=True)
 
-    pm_role = Column(String(20), nullable=False, default="user")
+    pm_role = Column(String(20), nullable=False, default="user", comment="user/photographer/both/admin/banned")
     pm_phone = Column(String(20), nullable=True)
     pm_city = Column(String(50), nullable=True, default="太原")
+    banned_at = Column(DateTime, nullable=True, comment="拉黑时间")
+    banned_reason = Column(String(500), nullable=True)
 
     # 协议接受记录(用户协议)
     user_agreement_version = Column(String(20), nullable=True, comment="已接受的用户协议版本号")
