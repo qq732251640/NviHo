@@ -3,10 +3,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import inspect, text
 
 from app.config import get_settings
 from app.database import Base, engine
+from app.db_migrate import run_migrations
 from app.models import (  # noqa: F401  (触发 metadata 注册)
     Category,
     Favorite,
@@ -35,54 +35,7 @@ from app.routers import (
 settings = get_settings()
 
 Base.metadata.create_all(bind=engine)
-
-
-def _run_migrations():
-    """给已有的旧表平滑增加新字段(SQLite ALTER TABLE ADD COLUMN)。
-
-    新建数据库时 Base.metadata.create_all 已经创建带新字段的表,这里只处理升级场景。
-    """
-    insp = inspect(engine)
-    pending: list[tuple[str, str]] = []
-
-    schema_updates = {
-        "users": [
-            ("user_agreement_version", "VARCHAR(20)"),
-            ("user_agreement_accepted_at", "DATETIME"),
-        ],
-        "pm_photographers": [
-            ("photographer_agreement_version", "VARCHAR(20)"),
-            ("service_commitment_version", "VARCHAR(20)"),
-            ("agreements_accepted_at", "DATETIME"),
-        ],
-        "pm_orders": [
-            ("delivery_password", "VARCHAR(50)"),
-            ("delivery_preview_images", "TEXT"),
-            ("delivery_note", "VARCHAR(500)"),
-            ("delivery_at", "DATETIME"),
-        ],
-    }
-
-    for table, cols in schema_updates.items():
-        if table not in insp.get_table_names():
-            continue
-        existing = {c["name"] for c in insp.get_columns(table)}
-        for col_name, col_type in cols:
-            if col_name not in existing:
-                pending.append((table, f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
-
-    if not pending:
-        return
-    with engine.begin() as conn:
-        for table, sql in pending:
-            try:
-                conn.execute(text(sql))
-                print(f"[migration] {table}: {sql}")
-            except Exception as e:
-                print(f"[migration] 跳过 {sql}: {e}")
-
-
-_run_migrations()
+run_migrations()
 
 app = FastAPI(
     title="摄影师预约小程序后端",

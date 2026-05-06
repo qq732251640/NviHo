@@ -13,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app.database import Base, SessionLocal, engine  # noqa: E402
+from app.db_migrate import run_migrations  # noqa: E402
 from app.models import (  # noqa: E402
     Category,
     Package,
@@ -186,6 +187,7 @@ DEMO_IMAGES = [
 
 def seed():
     Base.metadata.create_all(bind=engine)
+    run_migrations()
     db = SessionLocal()
 
     if db.query(Category).count() == 0:

@@ -29,6 +29,18 @@ else
 fi
 
 echo "==== 3/5 数据库初始化 ===="
+# 先跑迁移, 给已有的旧库平滑加新字段(SQLite ALTER TABLE ADD COLUMN)
+# 这样后续 admin 存在性检查不会因为缺列直接炸
+venv/bin/python - <<'PY'
+import sys
+sys.path.insert(0, '.')
+from app.database import Base, engine
+from app import models  # noqa: F401  触发 metadata 注册
+from app.db_migrate import run_migrations
+Base.metadata.create_all(bind=engine)
+run_migrations()
+PY
+
 NEED_SEED=$(venv/bin/python - <<'PY'
 import sys
 sys.path.insert(0, '.')
@@ -39,7 +51,8 @@ try:
     n = db.query(User).filter(User.username == 'admin').count()
     db.close()
     print('1' if n == 0 else '0')
-except Exception:
+except Exception as e:
+    print(f'check failed: {e}', file=sys.stderr)
     print('1')
 PY
 )
