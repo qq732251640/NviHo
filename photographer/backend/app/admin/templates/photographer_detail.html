@@ -1,5 +1,52 @@
 {% extends "base.html" %}
+{% set active = "photographers" %}
 {% block title %}{{ pgr.nickname }}{% endblock %}
+
+{% block head %}
+<style>
+  .sub-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .sub-tabs a {
+    padding: 10px 16px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .sub-tabs a.active {
+    color: var(--text);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .penalty-row {
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 13px;
+  }
+  .severity-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .severity-warning { background: rgba(255,170,0,0.15); color: #d4a008; }
+  .severity-fine { background: rgba(255,106,61,0.15); color: var(--warn); }
+  .severity-suspend { background: rgba(217,48,37,0.15); color: var(--danger); }
+  .severity-ban { background: rgba(0,0,0,0.85); color: #fff; }
+  .commission-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg);
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .commission-row .lbl { color: var(--text-tertiary); font-size: 12px; }
+  .commission-row .val { font-size: 18px; font-weight: 700; color: var(--text); }
+  .commission-row .val.warn { color: var(--warn); }
+</style>
+{% endblock %}
 
 {% block content %}
 {% if msg %}
@@ -15,13 +62,18 @@
         <span class="status-badge status-{{ pgr.status }}">
           {% if pgr.status == 'approved' %}已上架{% elif pgr.status == 'pending' %}待审核{% elif pgr.status == 'frozen' %}已下架{% else %}{{ pgr.status }}{% endif %}
         </span>
+        {% if warning_count >= warning_threshold %}
+          <span class="severity-badge severity-suspend">已累计 {{ warning_count }} 次警告</span>
+        {% elif warning_count > 0 %}
+          <span class="severity-badge severity-warning">{{ warning_count }} 次警告</span>
+        {% endif %}
       </div>
       <div class="text-secondary mt-8" style="font-size: 13px;">
         {{ pgr.completed_orders or 0 }} 单 · ⭐ {{ '%.1f'|format(pgr.avg_rating or 5) }}({{ pgr.review_count or 0 }} 评价) · 起拍价 {{ pgr.starting_price | price }} · 创建于 {{ pgr.created_at | date }}
       </div>
     </div>
     <div class="actions" style="display:flex; gap:8px;">
-      <a href="/admin/" class="btn">返回列表</a>
+      <a href="/admin/photographers/" class="btn">返回列表</a>
       {% if pgr.status != 'approved' %}
       <form method="post" action="/admin/photographers/{{ pgr.id }}/status" style="display:inline">
         <input type="hidden" name="status" value="approved">
@@ -38,7 +90,16 @@
   </div>
 </div>
 
-<!-- 编辑资料 -->
+<div class="sub-tabs">
+  <a class="{% if tab == 'info' %}active{% endif %}" href="/admin/photographers/{{ pgr.id }}?tab=info">基础资料</a>
+  <a class="{% if tab == 'works' %}active{% endif %}" href="/admin/photographers/{{ pgr.id }}?tab=works">作品 ({{ pgr.works | length }})</a>
+  <a class="{% if tab == 'packages' %}active{% endif %}" href="/admin/photographers/{{ pgr.id }}?tab=packages">套餐 / 佣金 ({{ pgr.packages | length }})</a>
+  <a class="{% if tab == 'orders' %}active{% endif %}" href="/admin/photographers/{{ pgr.id }}?tab=orders">订单</a>
+  <a class="{% if tab == 'penalty' %}active{% endif %}" href="/admin/photographers/{{ pgr.id }}?tab=penalty">处罚记录 ({{ penalties | length }})</a>
+</div>
+
+{% if tab == 'info' %}
+<!-- 基础资料 -->
 <div class="card">
   <div class="card-title">基础资料</div>
   <form method="post" action="/admin/photographers/{{ pgr.id }}/edit" enctype="multipart/form-data">
@@ -125,11 +186,41 @@
   </form>
 </div>
 
+<!-- 摄影师级佣金率 -->
+<div class="card">
+  <div class="card-title">佣金率(摄影师级)</div>
+  <div class="commission-row">
+    <div>
+      <div class="lbl">平台默认</div>
+      <div class="val">{{ default_commission_rate | pct }}</div>
+    </div>
+    <div>
+      <div class="lbl">该摄影师专属</div>
+      <div class="val warn">{{ pgr.commission_rate | pct if pgr.commission_rate is not none else '使用默认' }}</div>
+    </div>
+    {% if fine_total %}
+    <div style="margin-left:auto;">
+      <div class="lbl">累计罚款</div>
+      <div class="val" style="color: var(--danger);">{{ fine_total | price }}</div>
+    </div>
+    {% endif %}
+  </div>
+  <form method="post" action="/admin/photographers/{{ pgr.id }}/commission" class="form-row" style="align-items: flex-end;">
+    <div class="form-group" style="max-width: 220px;">
+      <label>设置专属佣金率</label>
+      <input type="text" name="commission_rate" value="{{ pgr.commission_rate * 100 if pgr.commission_rate is not none else '' }}" placeholder="如 8 表示 8%, 留空= 用默认">
+      <div class="hint">优先级:套餐 &gt; 摄影师 &gt; 平台默认。改了只影响新订单, 历史订单已 snapshot。</div>
+    </div>
+    <div>
+      <button class="btn btn-primary">保存费率</button>
+    </div>
+  </form>
+</div>
+
+{% elif tab == 'works' %}
 <!-- 作品管理 -->
 <div class="card">
-  <div class="card-title">
-    作品 ({{ pgr.works | length }})
-  </div>
+  <div class="card-title">作品 ({{ pgr.works | length }})</div>
 
   <form method="post" action="/admin/photographers/{{ pgr.id }}/works/add" enctype="multipart/form-data" class="mb-16">
     <div class="form-row">
@@ -186,11 +277,10 @@
   {% endif %}
 </div>
 
+{% elif tab == 'packages' %}
 <!-- 套餐管理 -->
 <div class="card">
-  <div class="card-title">
-    套餐 ({{ pgr.packages | length }})
-  </div>
+  <div class="card-title">套餐 ({{ pgr.packages | length }})</div>
 
   <form method="post" action="/admin/photographers/{{ pgr.id }}/packages/add" class="mb-16">
     <div class="form-row">
@@ -240,6 +330,7 @@
           <th>精修</th>
           <th>说明</th>
           <th style="text-align:right">价格</th>
+          <th>套餐佣金率</th>
           <th></th>
         </tr>
       </thead>
@@ -253,6 +344,12 @@
           <td class="text-secondary">{{ p.description or '' }}</td>
           <td class="price" style="text-align:right">{{ p.price | price }}</td>
           <td>
+            <form method="post" action="/admin/photographers/{{ pgr.id }}/packages/{{ p.id }}/commission" style="display:flex; gap:4px;">
+              <input type="text" name="commission_rate" value="{{ p.commission_rate * 100 if p.commission_rate is not none else '' }}" placeholder="留空=用默认" style="width: 90px; padding: 4px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px;">
+              <button class="btn btn-sm">保存</button>
+            </form>
+          </td>
+          <td>
             <form method="post" action="/admin/photographers/{{ pgr.id }}/packages/{{ p.id }}/delete" style="display:inline" onsubmit="return confirm('删除此套餐?')">
               <button type="submit" class="btn btn-sm btn-danger">删除</button>
             </form>
@@ -261,10 +358,115 @@
         {% endfor %}
       </tbody>
     </table>
+    <div class="hint mt-8">套餐佣金率为空时, 退回摄影师级 → 平台默认 ({{ default_commission_rate | pct }})。</div>
   {% else %}
     <div class="empty">还没有套餐 — <strong>必须至少加 1 个套餐用户才能下单</strong></div>
   {% endif %}
 </div>
+
+{% elif tab == 'orders' %}
+<!-- 订单 -->
+<div class="card">
+  <div class="card-title">最近 20 单</div>
+  {% if recent_orders %}
+    <table class="pkg-table">
+      <thead>
+        <tr><th>下单时间</th><th>订单号</th><th>用户</th><th>套餐</th><th>拍摄日</th><th style="text-align:right">金额</th><th>状态</th></tr>
+      </thead>
+      <tbody>
+        {% for o in recent_orders %}
+        <tr onclick="location.href='/admin/orders/{{ o.id }}'" style="cursor:pointer;">
+          <td>{{ o.created_at | datetime }}</td>
+          <td style="font-family: monospace; font-size: 11px;">{{ o.order_no }}</td>
+          <td>{{ o.user.nickname or o.user.username if o.user else '—' }}</td>
+          <td>{{ o.package.name if o.package else '—' }}</td>
+          <td>{{ o.shoot_date | date }}</td>
+          <td class="price" style="text-align:right">{{ o.amount_total | price }}</td>
+          <td><span class="status-badge status-{{ o.status }}">{{ ORDER_STATUS_LABELS.get(o.status, o.status) }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="empty">该摄影师暂无订单</div>
+  {% endif %}
+</div>
+
+{% elif tab == 'penalty' %}
+<!-- 处罚记录 -->
+<div class="card">
+  <div class="card-title">录入新处罚</div>
+  <form method="post" action="/admin/photographers/{{ pgr.id }}/penalties/add">
+    <div class="form-row">
+      <div class="form-group" style="max-width: 180px;">
+        <label>处罚类型 *</label>
+        <select name="type" required>
+          {% for t in PENALTY_TYPES %}
+            <option value="{{ t }}">{{ PENALTY_TYPE_LABELS.get(t, t) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="max-width: 180px;">
+        <label>严重程度 *</label>
+        <select name="severity" required>
+          {% for s in PENALTY_SEVERITIES %}
+            <option value="{{ s }}">{{ PENALTY_SEVERITY_LABELS.get(s, s) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="max-width: 140px;">
+        <label>罚款金额(元)</label>
+        <input type="number" name="fine_amount_yuan" min="0" value="0">
+      </div>
+      <div class="form-group" style="max-width: 140px;">
+        <label>关联订单 ID</label>
+        <input type="number" name="order_id" placeholder="可选">
+      </div>
+      <div class="form-group">
+        <label>详细说明</label>
+        <input type="text" name="notes" placeholder="客诉内容 / 处罚原因">
+      </div>
+      <div style="align-self: flex-end;">
+        <button class="btn btn-danger">提交处罚</button>
+      </div>
+    </div>
+    <div class="hint">连续 {{ warning_threshold }} 次「警告」会自动下架; 「暂停」「永久封禁」立即下架。</div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">历史处罚 ({{ penalties | length }} 条, 累计罚款 {{ fine_total | price }})</div>
+  {% if penalties %}
+    {% for p in penalties %}
+    <div class="penalty-row">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="severity-badge severity-{{ p.severity }}">{{ PENALTY_SEVERITY_LABELS.get(p.severity, p.severity) }}</span>
+        <strong>{{ PENALTY_TYPE_LABELS.get(p.type, p.type) }}</strong>
+        {% if p.fine_amount %}
+          <span style="color: var(--danger); font-weight: 700;">罚 {{ p.fine_amount | price }}</span>
+        {% endif %}
+        {% if p.order_id %}
+          <a href="/admin/orders/{{ p.order_id }}" class="text-tertiary" style="font-size: 12px;">订单 #{{ p.order_id }}</a>
+        {% endif %}
+        <span style="margin-left: auto;">
+          <form method="post" action="/admin/photographers/{{ pgr.id }}/penalties/{{ p.id }}/delete" style="display:inline" onsubmit="return confirm('撤销这条处罚?')">
+            <button class="btn btn-sm" type="submit">撤销</button>
+          </form>
+        </span>
+      </div>
+      {% if p.notes %}
+        <div style="margin-top: 6px;">{{ p.notes }}</div>
+      {% endif %}
+      <div class="text-tertiary" style="font-size: 11px; margin-top: 4px;">
+        {{ p.created_at | datetime }} · 操作人 #{{ p.operator_id or '系统' }}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty">没有处罚记录</div>
+  {% endif %}
+</div>
+{% endif %}
 
 <script>
 function previewImage(input, previewId) {

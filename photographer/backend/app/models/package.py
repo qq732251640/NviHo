@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -19,6 +19,11 @@ class Package(Base):
     price = Column(Integer, nullable=False, comment="单位:分")
     is_active = Column(Integer, default=1)
     sort = Column(Integer, default=0)
+
+    # 套餐级佣金率, NULL 时 fallback 到摄影师 → 平台默认
+    commission_rate = Column(
+        Float, nullable=True, comment="套餐专属抽佣比例, 优先级最高"
+    )
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -8,6 +8,7 @@ from app.models.order import Order, OrderStatus
 from app.models.review import Review
 from app.models.payment import Payment
 from app.models.favorite import Favorite
+from app.models.penalty import Penalty
 
 __all__ = [
     "User",
@@ -22,4 +23,5 @@ __all__ = [
     "Review",
     "Payment",
     "Favorite",
+    "Penalty",
 ]

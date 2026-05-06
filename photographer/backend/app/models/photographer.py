@@ -51,6 +51,11 @@ class Photographer(Base):
     status = Column(String(20), default="pending", comment="pending/approved/frozen")
     starting_price = Column(Integer, default=0, comment="冗余字段:起拍价(元),用于列表页快速展示")
 
+    # 独立佣金率, NULL 时回退到全局默认 / 套餐覆盖优先级更高
+    commission_rate = Column(
+        Float, nullable=True, comment="摄影师专属抽佣比例, 空则用平台默认"
+    )
+
     # 协议接受记录(摄影师入驻协议 + 服务承诺书)
     photographer_agreement_version = Column(String(20), nullable=True, comment="已接受的入驻协议版本号")
     service_commitment_version = Column(String(20), nullable=True, comment="已接受的服务承诺书版本号")

@@ -27,6 +27,7 @@ from app.schemas.order import (
     WxPayPrepay,
 )
 from app.services.wxpay import create_jsapi_order
+from app.utils.commission import resolve_commission_rate
 from app.utils.order_no import gen_order_no
 
 router = APIRouter()
@@ -164,6 +165,7 @@ def create_order(
     if pgr.user_id == current_user.id:
         raise HTTPException(status_code=400, detail="不能给自己下单")
 
+    rate = resolve_commission_rate(package=pkg, photographer=pgr)
     order = Order(
         order_no=gen_order_no(),
         user_id=current_user.id,
@@ -176,8 +178,8 @@ def create_order(
         contact_name=data.contact_name or current_user.nickname,
         contact_phone=data.contact_phone or current_user.pm_phone,
         amount_total=pkg.price,
-        commission_rate=settings.DEFAULT_COMMISSION_RATE,
-        commission=int(pkg.price * settings.DEFAULT_COMMISSION_RATE),
+        commission_rate=rate,
+        commission=int(pkg.price * rate),
         status=OrderStatus.PENDING_PAY.value,
     )
     db.add(order)

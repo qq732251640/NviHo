@@ -28,6 +28,7 @@ class OrderStatus(str, Enum):
     USER_CANCELLED = "user_cancelled"
     CANCELLED = "cancelled"
     REFUNDED = "refunded"
+    PARTIAL_REFUNDED = "partial_refunded"
 
 
 class Order(Base):
@@ -50,6 +51,11 @@ class Order(Base):
     amount_total = Column(Integer, nullable=False, comment="单位:分")
     commission = Column(Integer, default=0, comment="平台抽佣,单位:分")
     commission_rate = Column(Float, default=0.08, comment="抽佣比例,落到订单上避免历史变动")
+
+    # 退款相关(支持部分退款)
+    refund_amount = Column(Integer, default=0, comment="累计已退款金额, 单位:分")
+    refund_reason = Column(String(500), nullable=True, comment="退款原因/客诉记录")
+    refunded_at = Column(DateTime, nullable=True, comment="最近一次退款时间")
 
     status = Column(String(30), default=OrderStatus.PENDING_PAY.value, index=True)
     reject_reason = Column(String(200), nullable=True)

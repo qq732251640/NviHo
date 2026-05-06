@@ -4,19 +4,23 @@
 登录后用 httpOnly cookie 携带 access_token,所有页面服务端渲染。
 """
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.category import Category
+from app.models.order import Order, OrderStatus
 from app.models.package import Package
+from app.models.payment import Payment
+from app.models.penalty import PENALTY_SEVERITIES, PENALTY_TYPES, Penalty
 from app.models.photographer import Photographer
 from app.models.user import User
 from app.models.work import Work
@@ -68,9 +72,71 @@ def _fmt_datetime(dt) -> str:
         return str(dt)
 
 
+def _fmt_pct(rate) -> str:
+    if rate is None:
+        return "—"
+    try:
+        return f"{float(rate) * 100:.1f}%"
+    except Exception:
+        return "—"
+
+
 templates.env.filters["price"] = _fmt_price
 templates.env.filters["date"] = _fmt_date
 templates.env.filters["datetime"] = _fmt_datetime
+templates.env.filters["pct"] = _fmt_pct
+
+
+# ---------- 订单 / 处罚 常量 ----------
+
+ORDER_STATUS_LABELS = {
+    "pending_pay": "待支付",
+    "pending_confirm": "待接单",
+    "accepted": "进行中",
+    "rejected": "已拒单",
+    "shooting_done": "待确认收片",
+    "reviewed": "已评价",
+    "auto_settled": "已完成",
+    "settled": "已结算",
+    "user_cancelled": "用户取消",
+    "cancelled": "已取消",
+    "refunded": "已退款",
+    "partial_refunded": "部分退款",
+}
+
+ORDER_STATUS_GROUPS = {
+    "pending_pay": ["pending_pay"],
+    "pending_confirm": ["pending_confirm"],
+    "in_progress": ["accepted", "shooting_done"],
+    "done": ["reviewed", "auto_settled", "settled"],
+    "refunded": ["refunded", "partial_refunded"],
+    "cancelled": ["rejected", "user_cancelled", "cancelled"],
+}
+
+PENALTY_TYPE_LABELS = {
+    "reject": "拒单",
+    "no_show": "爽约",
+    "late_delivery": "超时未交付",
+    "quality_complaint": "客诉",
+    "behavior": "服务态度",
+    "manual": "其他",
+}
+
+PENALTY_SEVERITY_LABELS = {
+    "warning": "警告",
+    "fine": "罚款",
+    "suspend": "暂停接单",
+    "ban": "永久封禁",
+}
+
+WARNING_AUTO_FREEZE_THRESHOLD = 3   # 累计 3 次 warning 自动 frozen
+
+
+templates.env.globals["ORDER_STATUS_LABELS"] = ORDER_STATUS_LABELS
+templates.env.globals["PENALTY_TYPE_LABELS"] = PENALTY_TYPE_LABELS
+templates.env.globals["PENALTY_SEVERITY_LABELS"] = PENALTY_SEVERITY_LABELS
+templates.env.globals["PENALTY_TYPES"] = PENALTY_TYPES
+templates.env.globals["PENALTY_SEVERITIES"] = PENALTY_SEVERITIES
 
 
 # ---------- 鉴权 ----------
@@ -174,10 +240,145 @@ def logout():
     return response
 
 
-# ---------- 摄影师列表(首页) ----------
+# ---------- 数据看板(首页) ----------
 
 @router.get("/", response_class=HTMLResponse)
-def dashboard(
+def dashboard(request: Request, db: Session = Depends(get_db)):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    today = date.today()
+    today_start = datetime.combine(today, datetime.min.time())
+    d7 = today_start - timedelta(days=7)
+    d30 = today_start - timedelta(days=30)
+
+    paid_filter = Order.paid_at.is_not(None)
+
+    def _sum_amount(since):
+        return (
+            db.query(func.coalesce(func.sum(Order.amount_total), 0))
+            .filter(paid_filter, Order.paid_at >= since)
+            .scalar()
+            or 0
+        )
+
+    def _sum_commission(since):
+        return (
+            db.query(func.coalesce(func.sum(Order.commission), 0))
+            .filter(paid_filter, Order.paid_at >= since)
+            .scalar()
+            or 0
+        )
+
+    def _count_paid(since):
+        return (
+            db.query(func.count(Order.id))
+            .filter(paid_filter, Order.paid_at >= since)
+            .scalar()
+            or 0
+        )
+
+    kpi = {
+        "gmv_today": _sum_amount(today_start),
+        "gmv_7d": _sum_amount(d7),
+        "gmv_30d": _sum_amount(d30),
+        "commission_30d": _sum_commission(d30),
+        "orders_today": _count_paid(today_start),
+        "orders_7d": _count_paid(d7),
+        "orders_30d": _count_paid(d30),
+        "refund_30d": (
+            db.query(func.coalesce(func.sum(Order.refund_amount), 0))
+            .filter(Order.refunded_at.is_not(None), Order.refunded_at >= d30)
+            .scalar()
+            or 0
+        ),
+    }
+
+    pgr_counts = {
+        "all": db.query(Photographer).count(),
+        "pending": db.query(Photographer).filter(Photographer.status == "pending").count(),
+        "approved": db.query(Photographer).filter(Photographer.status == "approved").count(),
+        "frozen": db.query(Photographer).filter(Photographer.status == "frozen").count(),
+    }
+
+    user_counts = {
+        "total": db.query(User).count(),
+        "new_30d": db.query(User).filter(User.created_at >= d30).count(),
+    }
+
+    # 待运营处理的事项
+    todos = {
+        "pending_pgr": db.query(Photographer).filter(Photographer.status == "pending").count(),
+        "pending_confirm": db.query(Order).filter(Order.status == "pending_confirm").count(),
+        "shooting_done": db.query(Order).filter(Order.status == "shooting_done").count(),
+    }
+
+    # 近 30 天每日 GMV 趋势(用于折线图)
+    daily_rows = (
+        db.query(
+            func.date(Order.paid_at).label("d"),
+            func.coalesce(func.sum(Order.amount_total), 0).label("gmv"),
+            func.count(Order.id).label("cnt"),
+        )
+        .filter(paid_filter, Order.paid_at >= d30)
+        .group_by(func.date(Order.paid_at))
+        .order_by(func.date(Order.paid_at))
+        .all()
+    )
+    trend = [
+        {"date": str(r.d), "gmv": int(r.gmv or 0), "cnt": int(r.cnt or 0)}
+        for r in daily_rows
+    ]
+
+    # TOP 5 摄影师 (按 30 天 GMV)
+    top_pgr_rows = (
+        db.query(
+            Photographer.id,
+            Photographer.nickname,
+            Photographer.avatar,
+            func.coalesce(func.sum(Order.amount_total), 0).label("gmv"),
+            func.count(Order.id).label("cnt"),
+        )
+        .join(Order, Order.photographer_id == Photographer.id)
+        .filter(paid_filter, Order.paid_at >= d30)
+        .group_by(Photographer.id)
+        .order_by(desc("gmv"))
+        .limit(5)
+        .all()
+    )
+
+    # 订单状态分布 (饼图)
+    status_rows = (
+        db.query(Order.status, func.count(Order.id))
+        .group_by(Order.status)
+        .all()
+    )
+    status_dist = [
+        {"status": s, "label": ORDER_STATUS_LABELS.get(s, s), "count": c}
+        for s, c in status_rows
+    ]
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "user": user,
+            "kpi": kpi,
+            "pgr_counts": pgr_counts,
+            "user_counts": user_counts,
+            "todos": todos,
+            "trend": trend,
+            "top_pgr": top_pgr_rows,
+            "status_dist": status_dist,
+        },
+    )
+
+
+# ---------- 摄影师管理(列表) ----------
+
+@router.get("/photographers/", response_class=HTMLResponse)
+def photographers_list(
     request: Request,
     status: str | None = Query(None),
     keyword: str | None = Query(None),
@@ -203,7 +404,7 @@ def dashboard(
     }
 
     return templates.TemplateResponse(
-        "dashboard.html",
+        "photographers_list.html",
         {
             "request": request,
             "user": user,
@@ -364,6 +565,28 @@ def photographer_detail_page(
     categories = db.query(Category).order_by(Category.sort).all()
     selected_category_ids = [c.id for c in pgr.categories]
 
+    # 处罚记录(默认隐藏 tab, 锚点 #penalty 跳过来时展开)
+    penalties = (
+        db.query(Penalty)
+        .filter(Penalty.photographer_id == pgr.id)
+        .order_by(desc(Penalty.created_at))
+        .all()
+    )
+    warning_count = sum(1 for p in penalties if p.severity == "warning")
+    fine_total = sum((p.fine_amount or 0) for p in penalties)
+
+    # 该摄影师近期订单(给详情页一个快速入口)
+    recent_orders = (
+        db.query(Order)
+        .options(selectinload(Order.user), selectinload(Order.package))
+        .filter(Order.photographer_id == pgr.id)
+        .order_by(desc(Order.created_at))
+        .limit(20)
+        .all()
+    )
+
+    settings = get_settings()
+
     return templates.TemplateResponse(
         "photographer_detail.html",
         {
@@ -372,7 +595,14 @@ def photographer_detail_page(
             "pgr": pgr,
             "categories": categories,
             "selected_category_ids": selected_category_ids,
+            "penalties": penalties,
+            "warning_count": warning_count,
+            "fine_total": fine_total,
+            "warning_threshold": WARNING_AUTO_FREEZE_THRESHOLD,
+            "recent_orders": recent_orders,
+            "default_commission_rate": settings.DEFAULT_COMMISSION_RATE,
             "msg": request.query_params.get("msg"),
+            "tab": request.query_params.get("tab") or "info",
         },
     )
 
@@ -627,4 +857,443 @@ def set_status(
     label = {"approved": "已上架", "frozen": "已下架", "pending": "已设为待审核"}[status]
     return RedirectResponse(
         f"/admin/photographers/{photographer_id}?msg={label}", status_code=302
+    )
+
+
+# ---------- 摄影师佣金率 ----------
+
+@router.post("/photographers/{photographer_id}/commission")
+def set_photographer_commission(
+    photographer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    commission_rate: str = Form(""),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    pgr = db.query(Photographer).filter(Photographer.id == photographer_id).first()
+    if not pgr:
+        raise HTTPException(status_code=404, detail="摄影师不存在")
+
+    val = (commission_rate or "").strip()
+    if val == "":
+        pgr.commission_rate = None
+        msg = "已清除自定义费率, 改用平台默认"
+    else:
+        try:
+            rate = float(val)
+        except ValueError:
+            return RedirectResponse(
+                f"/admin/photographers/{photographer_id}?msg=费率必须是数字",
+                status_code=302,
+            )
+        if rate > 1:
+            rate = rate / 100.0  # 允许填 8 表示 8%
+        if rate < 0 or rate > 1:
+            return RedirectResponse(
+                f"/admin/photographers/{photographer_id}?msg=费率范围 0~100%",
+                status_code=302,
+            )
+        pgr.commission_rate = rate
+        msg = f"佣金率已设为 {rate * 100:.1f}%"
+    db.commit()
+    return RedirectResponse(
+        f"/admin/photographers/{photographer_id}?msg={msg}", status_code=302
+    )
+
+
+# ---------- 摄影师处罚 ----------
+
+@router.post("/photographers/{photographer_id}/penalties/add")
+def add_penalty(
+    photographer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    type: str = Form(...),
+    severity: str = Form(...),
+    fine_amount_yuan: int = Form(0),
+    notes: str = Form(""),
+    order_id: int | None = Form(None),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    pgr = db.query(Photographer).filter(Photographer.id == photographer_id).first()
+    if not pgr:
+        raise HTTPException(status_code=404, detail="摄影师不存在")
+    if type not in PENALTY_TYPES:
+        raise HTTPException(status_code=400, detail="处罚类型不合法")
+    if severity not in PENALTY_SEVERITIES:
+        raise HTTPException(status_code=400, detail="严重程度不合法")
+
+    p = Penalty(
+        photographer_id=pgr.id,
+        order_id=order_id,
+        type=type,
+        severity=severity,
+        fine_amount=max(0, fine_amount_yuan) * 100,
+        notes=notes or None,
+        operator_id=user.id,
+    )
+    db.add(p)
+
+    # 自动联动: ban -> frozen, suspend -> frozen, warning 累积 N 次 -> frozen
+    if severity in ("ban", "suspend"):
+        pgr.status = "frozen"
+    elif severity == "warning":
+        warn_count = (
+            db.query(func.count(Penalty.id))
+            .filter(
+                Penalty.photographer_id == pgr.id,
+                Penalty.severity == "warning",
+            )
+            .scalar()
+            or 0
+        )
+        # +1 因为还没 commit
+        if warn_count + 1 >= WARNING_AUTO_FREEZE_THRESHOLD:
+            pgr.status = "frozen"
+
+    db.commit()
+    return RedirectResponse(
+        f"/admin/photographers/{photographer_id}?msg=处罚已记录&tab=penalty",
+        status_code=302,
+    )
+
+
+@router.post("/photographers/{photographer_id}/penalties/{penalty_id}/delete")
+def delete_penalty(
+    photographer_id: int,
+    penalty_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    p = (
+        db.query(Penalty)
+        .filter(Penalty.id == penalty_id, Penalty.photographer_id == photographer_id)
+        .first()
+    )
+    if p:
+        db.delete(p)
+        db.commit()
+    return RedirectResponse(
+        f"/admin/photographers/{photographer_id}?msg=处罚已删除&tab=penalty",
+        status_code=302,
+    )
+
+
+# ---------- 订单管理 ----------
+
+def _eager_order_query(db: Session):
+    return db.query(Order).options(
+        selectinload(Order.user),
+        selectinload(Order.photographer).selectinload(Photographer.user),
+        selectinload(Order.package),
+        selectinload(Order.payments),
+    )
+
+
+@router.get("/orders/", response_class=HTMLResponse)
+def orders_list(
+    request: Request,
+    status: str | None = Query(None),
+    keyword: str | None = Query(None, description="按订单号 / 用户名 / 摄影师昵称搜索"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    q = _eager_order_query(db)
+
+    if status and status != "all":
+        if status in ORDER_STATUS_GROUPS:
+            q = q.filter(Order.status.in_(ORDER_STATUS_GROUPS[status]))
+        else:
+            q = q.filter(Order.status == status)
+
+    if keyword:
+        like = f"%{keyword}%"
+        q = q.outerjoin(Order.user).outerjoin(Order.photographer)
+        q = q.filter(
+            (Order.order_no.like(like))
+            | (User.nickname.like(like))
+            | (User.username.like(like))
+            | (Photographer.nickname.like(like))
+        )
+
+    if date_from:
+        try:
+            df = datetime.strptime(date_from, "%Y-%m-%d")
+            q = q.filter(Order.created_at >= df)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_ = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            q = q.filter(Order.created_at < dt_)
+        except ValueError:
+            pass
+
+    rows = q.order_by(desc(Order.created_at)).limit(500).all()
+
+    # 各分组计数(走原始 query, 忽略 status filter)
+    base_count_q = db.query(func.count(Order.id))
+    counts = {
+        "all": base_count_q.scalar() or 0,
+        "pending_pay": base_count_q.filter(Order.status == "pending_pay").scalar() or 0,
+        "pending_confirm": db.query(func.count(Order.id))
+        .filter(Order.status == "pending_confirm")
+        .scalar()
+        or 0,
+        "in_progress": db.query(func.count(Order.id))
+        .filter(Order.status.in_(ORDER_STATUS_GROUPS["in_progress"]))
+        .scalar()
+        or 0,
+        "done": db.query(func.count(Order.id))
+        .filter(Order.status.in_(ORDER_STATUS_GROUPS["done"]))
+        .scalar()
+        or 0,
+        "refunded": db.query(func.count(Order.id))
+        .filter(Order.status.in_(ORDER_STATUS_GROUPS["refunded"]))
+        .scalar()
+        or 0,
+        "cancelled": db.query(func.count(Order.id))
+        .filter(Order.status.in_(ORDER_STATUS_GROUPS["cancelled"]))
+        .scalar()
+        or 0,
+    }
+
+    return templates.TemplateResponse(
+        "orders_list.html",
+        {
+            "request": request,
+            "user": user,
+            "rows": rows,
+            "status": status or "all",
+            "keyword": keyword or "",
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+            "counts": counts,
+        },
+    )
+
+
+@router.get("/orders/{order_id}", response_class=HTMLResponse)
+def order_detail(
+    order_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+
+    o = (
+        _eager_order_query(db)
+        .filter(Order.id == order_id)
+        .first()
+    )
+    if not o:
+        raise HTTPException(status_code=404, detail="订单不存在")
+
+    payments = (
+        db.query(Payment).filter(Payment.order_id == o.id).order_by(Payment.created_at).all()
+    )
+    penalties = (
+        db.query(Penalty).filter(Penalty.order_id == o.id).order_by(desc(Penalty.created_at)).all()
+    )
+
+    refundable = max(0, (o.amount_total or 0) - (o.refund_amount or 0))
+
+    timeline = []
+    if o.created_at:
+        timeline.append(("创建订单", o.created_at))
+    if o.paid_at:
+        timeline.append(("用户支付", o.paid_at))
+    if o.accepted_at:
+        timeline.append(("摄影师接单", o.accepted_at))
+    if o.delivery_at:
+        timeline.append(("摄影师交付", o.delivery_at))
+    if o.confirmed_at:
+        timeline.append(("用户确认收片", o.confirmed_at))
+    if o.refunded_at:
+        timeline.append(("退款", o.refunded_at))
+    if o.cancelled_at:
+        timeline.append(("订单取消", o.cancelled_at))
+    if o.settled_at:
+        timeline.append(("已结算给摄影师", o.settled_at))
+    timeline.sort(key=lambda x: x[1])
+
+    return templates.TemplateResponse(
+        "order_detail.html",
+        {
+            "request": request,
+            "user": user,
+            "o": o,
+            "payments": payments,
+            "penalties": penalties,
+            "timeline": timeline,
+            "refundable": refundable,
+            "msg": request.query_params.get("msg"),
+        },
+    )
+
+
+@router.post("/orders/{order_id}/refund")
+def refund_order(
+    order_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    amount_yuan: int = Form(...),
+    reason: str = Form(...),
+    refund_type: str = Form("user_complaint"),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    o = db.query(Order).filter(Order.id == order_id).first()
+    if not o:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if not o.paid_at:
+        return RedirectResponse(
+            f"/admin/orders/{order_id}?msg=订单未支付, 无可退金额", status_code=302
+        )
+
+    amount_cents = max(0, amount_yuan) * 100
+    refundable = (o.amount_total or 0) - (o.refund_amount or 0)
+    if amount_cents <= 0:
+        return RedirectResponse(
+            f"/admin/orders/{order_id}?msg=退款金额必须大于 0", status_code=302
+        )
+    if amount_cents > refundable:
+        return RedirectResponse(
+            f"/admin/orders/{order_id}?msg=金额超出可退余额 {refundable / 100:.0f} 元",
+            status_code=302,
+        )
+
+    # 写流水
+    db.add(
+        Payment(
+            order_id=o.id,
+            type="refund",
+            amount=amount_cents,
+            wx_transaction_id=None,
+            status="success",
+            raw_callback=f'{{"manual":true,"by":{user.id},"reason":{reason!r},"refund_type":{refund_type!r}}}',
+        )
+    )
+
+    o.refund_amount = (o.refund_amount or 0) + amount_cents
+    o.refunded_at = datetime.utcnow()
+    o.refund_reason = (
+        (o.refund_reason + "\n---\n" if o.refund_reason else "")
+        + f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M')}] {refund_type} - {reason}"
+    )
+
+    if o.refund_amount >= (o.amount_total or 0):
+        o.status = OrderStatus.REFUNDED.value
+    else:
+        o.status = OrderStatus.PARTIAL_REFUNDED.value
+
+    # TODO: 真实接通微信退款时, 在这里调 services.wxpay.refund_order(o, amount_cents)
+
+    db.commit()
+    return RedirectResponse(
+        f"/admin/orders/{order_id}?msg=已退款 ¥{amount_cents / 100:.0f}",
+        status_code=302,
+    )
+
+
+@router.post("/orders/{order_id}/penalty")
+def order_add_penalty(
+    order_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    type: str = Form(...),
+    severity: str = Form(...),
+    fine_amount_yuan: int = Form(0),
+    notes: str = Form(""),
+):
+    """从订单详情页对该订单的摄影师录入处罚记录。"""
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    o = db.query(Order).filter(Order.id == order_id).first()
+    if not o:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if type not in PENALTY_TYPES or severity not in PENALTY_SEVERITIES:
+        raise HTTPException(status_code=400, detail="参数不合法")
+
+    p = Penalty(
+        photographer_id=o.photographer_id,
+        order_id=o.id,
+        type=type,
+        severity=severity,
+        fine_amount=max(0, fine_amount_yuan) * 100,
+        notes=notes or None,
+        operator_id=user.id,
+    )
+    db.add(p)
+    if severity in ("ban", "suspend"):
+        pgr = db.query(Photographer).filter(Photographer.id == o.photographer_id).first()
+        if pgr:
+            pgr.status = "frozen"
+    db.commit()
+    return RedirectResponse(
+        f"/admin/orders/{order_id}?msg=已对摄影师录入处罚",
+        status_code=302,
+    )
+
+
+# ---------- 套餐佣金率 (复用 add_package, 单独路由更新) ----------
+
+@router.post("/photographers/{photographer_id}/packages/{package_id}/commission")
+def set_package_commission(
+    photographer_id: int,
+    package_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    commission_rate: str = Form(""),
+):
+    user = _get_admin_or_none(request, db)
+    if not user:
+        return RedirectResponse("/admin/login", status_code=302)
+    pkg = (
+        db.query(Package)
+        .filter(Package.id == package_id, Package.photographer_id == photographer_id)
+        .first()
+    )
+    if not pkg:
+        raise HTTPException(status_code=404, detail="套餐不存在")
+
+    val = (commission_rate or "").strip()
+    if val == "":
+        pkg.commission_rate = None
+    else:
+        try:
+            rate = float(val)
+        except ValueError:
+            return RedirectResponse(
+                f"/admin/photographers/{photographer_id}?msg=费率必须是数字",
+                status_code=302,
+            )
+        if rate > 1:
+            rate = rate / 100.0
+        if rate < 0 or rate > 1:
+            return RedirectResponse(
+                f"/admin/photographers/{photographer_id}?msg=费率范围 0~100%",
+                status_code=302,
+            )
+        pkg.commission_rate = rate
+    db.commit()
+    return RedirectResponse(
+        f"/admin/photographers/{photographer_id}?msg=套餐佣金率已更新",
+        status_code=302,
     )

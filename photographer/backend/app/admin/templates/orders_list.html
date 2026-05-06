@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% set active = "orders" %}
+{% block title %}订单管理{% endblock %}
+
+{% block head %}
+<style>
+  .order-table { width: 100%; border-collapse: collapse; }
+  .order-table th, .order-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: top;
+  }
+  .order-table th { color: var(--text-tertiary); font-weight: 500; font-size: 12px; }
+  .order-table tbody tr:hover { background: var(--bg); }
+  .order-table .order-no {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .order-table .amount { color: var(--warn); font-weight: 700; text-align: right; }
+  .order-table .status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .order-table .who {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .order-table .who img {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #f0f0f0;
+  }
+  /* 状态颜色 */
+  .status-pending_pay { background: rgba(255,170,0,0.15); color: #d4a008; }
+  .status-pending_confirm { background: rgba(0,122,255,0.12); color: #0064d2; }
+  .status-accepted { background: rgba(43,164,74,0.12); color: var(--success); }
+  .status-shooting_done { background: rgba(0,122,255,0.12); color: #0064d2; }
+  .status-reviewed,
+  .status-auto_settled,
+  .status-settled { background: rgba(43,164,74,0.12); color: var(--success); }
+  .status-rejected,
+  .status-user_cancelled,
+  .status-cancelled { background: rgba(120,120,120,0.12); color: #777; }
+  .status-refunded,
+  .status-partial_refunded { background: rgba(217,48,37,0.12); color: var(--danger); }
+
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .filter-bar .form-group { margin: 0; flex: 0 0 auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-title">订单管理</div>
+
+  <div class="tabs">
+    <a class="tab {% if status == 'all' %}active{% endif %}" href="/admin/orders/">全部 <span class="count">{{ counts.all }}</span></a>
+    <a class="tab {% if status == 'pending_pay' %}active{% endif %}" href="/admin/orders/?status=pending_pay">待支付 <span class="count">{{ counts.pending_pay }}</span></a>
+    <a class="tab {% if status == 'pending_confirm' %}active{% endif %}" href="/admin/orders/?status=pending_confirm">待接单 <span class="count">{{ counts.pending_confirm }}</span></a>
+    <a class="tab {% if status == 'in_progress' %}active{% endif %}" href="/admin/orders/?status=in_progress">进行中 <span class="count">{{ counts.in_progress }}</span></a>
+    <a class="tab {% if status == 'done' %}active{% endif %}" href="/admin/orders/?status=done">已完成 <span class="count">{{ counts.done }}</span></a>
+    <a class="tab {% if status == 'refunded' %}active{% endif %}" href="/admin/orders/?status=refunded">已退款 <span class="count">{{ counts.refunded }}</span></a>
+    <a class="tab {% if status == 'cancelled' %}active{% endif %}" href="/admin/orders/?status=cancelled">已取消 <span class="count">{{ counts.cancelled }}</span></a>
+  </div>
+
+  <form method="get" action="/admin/orders/" class="filter-bar">
+    {% if status and status != 'all' %}
+      <input type="hidden" name="status" value="{{ status }}">
+    {% endif %}
+    <div class="form-group" style="width: 280px;">
+      <label>关键词</label>
+      <input type="text" name="keyword" value="{{ keyword }}" placeholder="订单号 / 用户名 / 摄影师">
+    </div>
+    <div class="form-group" style="width: 140px;">
+      <label>下单起始</label>
+      <input type="date" name="date_from" value="{{ date_from }}">
+    </div>
+    <div class="form-group" style="width: 140px;">
+      <label>下单截止</label>
+      <input type="date" name="date_to" value="{{ date_to }}">
+    </div>
+    <div>
+      <button class="btn btn-primary" type="submit">筛选</button>
+      {% if keyword or date_from or date_to %}
+        <a class="btn" href="/admin/orders/{% if status and status != 'all' %}?status={{ status }}{% endif %}">清除</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if rows %}
+    <table class="order-table">
+      <thead>
+        <tr>
+          <th>订单号 / 时间</th>
+          <th>用户</th>
+          <th>摄影师</th>
+          <th>套餐</th>
+          <th>拍摄日期</th>
+          <th style="text-align:right">金额</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in rows %}
+        <tr onclick="location.href='/admin/orders/{{ o.id }}'" style="cursor: pointer;">
+          <td>
+            <div class="order-no">{{ o.order_no }}</div>
+            <div class="text-tertiary" style="font-size:11px; margin-top:2px;">{{ o.created_at | datetime }}</div>
+          </td>
+          <td>
+            <div class="who">
+              <img src="{{ o.user.avatar or '' }}" onerror="this.style.background='#f0f0f0'">
+              <span>{{ o.user.nickname or o.user.username if o.user else '—' }}</span>
+            </div>
+          </td>
+          <td>
+            <div class="who">
+              <img src="{{ o.photographer.avatar or '' }}" onerror="this.style.background='#f0f0f0'">
+              <span>{{ o.photographer.nickname if o.photographer else '—' }}</span>
+            </div>
+          </td>
+          <td>{{ o.package.name if o.package else '—' }}</td>
+          <td>{{ o.shoot_date | date }}</td>
+          <td class="amount">
+            {{ o.amount_total | price }}
+            {% if o.refund_amount %}
+              <div style="font-size:11px; color: var(--danger); font-weight:500;">已退 {{ o.refund_amount | price }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="status status-{{ o.status }}">{{ ORDER_STATUS_LABELS.get(o.status, o.status) }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="text-tertiary mt-16" style="font-size:12px;">显示前 500 条结果, 如需更多请用筛选缩小范围</div>
+  {% else %}
+    <div class="empty">没有符合条件的订单</div>
+  {% endif %}
+</div>
+{% endblock %}

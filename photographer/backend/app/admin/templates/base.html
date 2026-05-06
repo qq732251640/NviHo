@@ -441,7 +441,9 @@
   <div class="navbar">
     <a href="/admin/" class="navbar-brand">📷 摄影师后台</a>
     <div class="navbar-links">
-      <a href="/admin/" class="{% if active == 'dashboard' %}active{% endif %}">摄影师管理</a>
+      <a href="/admin/" class="{% if active == 'dashboard' %}active{% endif %}">数据看板</a>
+      <a href="/admin/orders/" class="{% if active == 'orders' %}active{% endif %}">订单管理</a>
+      <a href="/admin/photographers/" class="{% if active == 'photographers' %}active{% endif %}">摄影师管理</a>
       <a href="/docs" target="_blank">API 文档</a>
     </div>
     <div class="navbar-user">

@@ -1,66 +1,242 @@
 {% extends "base.html" %}
 {% set active = "dashboard" %}
-{% block title %}摄影师管理{% endblock %}
+{% block title %}数据看板{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .kpi-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .kpi-card .label {
+    color: var(--text-tertiary);
+    font-size: 12px;
+  }
+  .kpi-card .value {
+    margin-top: 4px;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .kpi-card .value.warn { color: var(--warn); }
+  .kpi-card .value.success { color: var(--success); }
+  .kpi-card .sub {
+    margin-top: 4px;
+    color: var(--text-tertiary);
+    font-size: 11px;
+  }
+  .todo-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .todo-pill {
+    padding: 6px 14px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .todo-pill .num {
+    margin-left: 6px;
+    color: var(--warn);
+    font-weight: 700;
+  }
+  .todo-pill.zero .num { color: var(--text-tertiary); }
+  .chart-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 900px) {
+    .chart-row { grid-template-columns: 1fr; }
+  }
+  .top-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .top-table th, .top-table td {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .top-table th { color: var(--text-tertiary); font-weight: 500; font-size: 12px; }
+  .top-table td.gmv { color: var(--warn); font-weight: 700; text-align: right; }
+  .top-table td.cnt { text-align: right; color: var(--text-secondary); }
+</style>
+{% endblock %}
 
 {% block content %}
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="label">今日 GMV</div>
+    <div class="value warn">{{ kpi.gmv_today | price }}</div>
+    <div class="sub">已支付订单总额</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">7 日 GMV</div>
+    <div class="value warn">{{ kpi.gmv_7d | price }}</div>
+    <div class="sub">{{ kpi.orders_7d }} 单</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">30 日 GMV</div>
+    <div class="value warn">{{ kpi.gmv_30d | price }}</div>
+    <div class="sub">{{ kpi.orders_30d }} 单</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">30 日平台抽佣</div>
+    <div class="value success">{{ kpi.commission_30d | price }}</div>
+    <div class="sub">毛利估算</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">30 日已退款</div>
+    <div class="value" style="color: var(--danger);">{{ kpi.refund_30d | price }}</div>
+    <div class="sub">含部分退款</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">在架摄影师</div>
+    <div class="value">{{ pgr_counts.approved }}</div>
+    <div class="sub">总 {{ pgr_counts.all }} · 待审 {{ pgr_counts.pending }} · 下架 {{ pgr_counts.frozen }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">注册用户</div>
+    <div class="value">{{ user_counts.total }}</div>
+    <div class="sub">30 日新增 {{ user_counts.new_30d }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">今日订单</div>
+    <div class="value">{{ kpi.orders_today }}</div>
+    <div class="sub">今日新付款</div>
+  </div>
+</div>
+
 <div class="card">
-  <div class="card-title">
-    摄影师管理
-    <div class="actions">
-      <a href="/admin/photographers/new" class="btn btn-accent">+ 新增摄影师</a>
-    </div>
-  </div>
-
-  <div class="tabs">
-    <a class="tab {% if status == 'all' %}active{% endif %}" href="/admin/">全部 <span class="count">{{ counts.all }}</span></a>
-    <a class="tab {% if status == 'pending' %}active{% endif %}" href="/admin/?status=pending">待审核 <span class="count">{{ counts.pending }}</span></a>
-    <a class="tab {% if status == 'approved' %}active{% endif %}" href="/admin/?status=approved">已上架 <span class="count">{{ counts.approved }}</span></a>
-    <a class="tab {% if status == 'frozen' %}active{% endif %}" href="/admin/?status=frozen">已下架 <span class="count">{{ counts.frozen }}</span></a>
-  </div>
-
-  <form method="get" action="/admin/" class="mb-16">
-    {% if status and status != 'all' %}
-      <input type="hidden" name="status" value="{{ status }}">
-    {% endif %}
-    <div class="form-row">
-      <div class="form-group" style="max-width: 320px;">
-        <input type="text" name="keyword" value="{{ keyword }}" placeholder="搜索摄影师昵称">
-      </div>
-      <div>
-        <button class="btn btn-primary" type="submit">搜索</button>
-      </div>
-    </div>
-  </form>
-
-  {% if rows %}
-  <div class="pgr-grid">
-    {% for p in rows %}
-    <a class="pgr-card" href="/admin/photographers/{{ p.id }}">
-      <div class="cover" style="background-image: url('{{ p.cover_image or p.avatar or '' }}')"></div>
-      <div class="info">
-        <div class="name">
-          <span>{{ p.nickname }}</span>
-          {% if p.starting_price %}
-            <span class="price">{{ p.starting_price | price }}</span>
-          {% endif %}
-        </div>
-        <div class="meta">
-          <span class="status-badge status-{{ p.status }}">
-            {% if p.status == 'approved' %}已上架{% elif p.status == 'pending' %}待审核{% elif p.status == 'frozen' %}已下架{% else %}{{ p.status }}{% endif %}
-          </span>
-          · {{ p.completed_orders or 0 }} 单 · ⭐{{ '%.1f'|format(p.avg_rating or 5) }}
-        </div>
-        {% if p.categories %}
-        <div class="tags">
-          {% for c in p.categories %}<span>{{ c.name }}</span>{% endfor %}
-        </div>
-        {% endif %}
-      </div>
+  <div class="card-title" style="font-size: 14px;">运营待办</div>
+  <div class="todo-row">
+    <a class="todo-pill {% if todos.pending_pgr == 0 %}zero{% endif %}" href="/admin/photographers/?status=pending">
+      待审核摄影师 <span class="num">{{ todos.pending_pgr }}</span>
     </a>
-    {% endfor %}
+    <a class="todo-pill {% if todos.pending_confirm == 0 %}zero{% endif %}" href="/admin/orders/?status=pending_confirm">
+      待接单订单 <span class="num">{{ todos.pending_confirm }}</span>
+    </a>
+    <a class="todo-pill {% if todos.shooting_done == 0 %}zero{% endif %}" href="/admin/orders/?status=shooting_done">
+      待用户确认收片 <span class="num">{{ todos.shooting_done }}</span>
+    </a>
   </div>
+</div>
+
+<div class="chart-row">
+  <div class="card">
+    <div class="card-title" style="font-size: 14px;">近 30 日 GMV / 订单数</div>
+    <canvas id="chart-trend" height="120"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-title" style="font-size: 14px;">订单状态分布</div>
+    <canvas id="chart-status" height="180"></canvas>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title" style="font-size: 14px;">近 30 日 TOP 5 摄影师</div>
+  {% if top_pgr %}
+    <table class="top-table">
+      <thead>
+        <tr><th>摄影师</th><th style="text-align:right">订单数</th><th style="text-align:right">GMV</th></tr>
+      </thead>
+      <tbody>
+        {% for r in top_pgr %}
+        <tr>
+          <td>
+            <a href="/admin/photographers/{{ r.id }}" style="display:flex; align-items:center; gap:10px;">
+              <img class="avatar" style="width:32px; height:32px;" src="{{ r.avatar or '' }}" onerror="this.style.background='#f0f0f0'">
+              {{ r.nickname }}
+            </a>
+          </td>
+          <td class="cnt">{{ r.cnt }}</td>
+          <td class="gmv">{{ r.gmv | price }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   {% else %}
-  <div class="empty">还没有摄影师,点右上角「新增摄影师」开始录入</div>
+    <div class="empty">近 30 日还没有已支付订单</div>
   {% endif %}
 </div>
+
+<script>
+  const trend = {{ trend | tojson }};
+  const statusDist = {{ status_dist | tojson }};
+
+  if (trend.length > 0) {
+    const ctx = document.getElementById('chart-trend');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: trend.map(d => d.date.slice(5)),
+        datasets: [
+          {
+            label: 'GMV (元)',
+            data: trend.map(d => d.gmv / 100),
+            borderColor: '#ff6a3d',
+            backgroundColor: 'rgba(255,106,61,0.1)',
+            tension: 0.3,
+            yAxisID: 'y',
+            fill: true,
+          },
+          {
+            label: '订单数',
+            data: trend.map(d => d.cnt),
+            borderColor: '#1a1a1a',
+            backgroundColor: 'rgba(0,0,0,0)',
+            tension: 0.3,
+            yAxisID: 'y1',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          y: { type: 'linear', position: 'left', title: { display: true, text: 'GMV' } },
+          y1: { type: 'linear', position: 'right', title: { display: true, text: '订单数' }, grid: { drawOnChartArea: false } },
+        },
+      },
+    });
+  }
+
+  if (statusDist.length > 0) {
+    const ctx2 = document.getElementById('chart-status');
+    const palette = ['#1a1a1a', '#c89b6a', '#ff6a3d', '#2ba44a', '#888', '#666', '#bbb', '#d93025', '#444'];
+    new Chart(ctx2, {
+      type: 'doughnut',
+      data: {
+        labels: statusDist.map(d => d.label),
+        datasets: [{
+          data: statusDist.map(d => d.count),
+          backgroundColor: statusDist.map((_, i) => palette[i % palette.length]),
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+        },
+      },
+    });
+  }
+</script>
 {% endblock %}

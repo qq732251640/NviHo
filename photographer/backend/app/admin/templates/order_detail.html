@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% set active = "orders" %}
+{% block title %}订单 {{ o.order_no }}{% endblock %}
+
+{% block head %}
+<style>
+  .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px;
+    width: 2px; background: var(--border);
+  }
+  .timeline .step {
+    position: relative;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .timeline .step::before {
+    content: ''; position: absolute; left: -24px; top: 8px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); border: 3px solid #fff;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .timeline .step .label { color: var(--text); font-weight: 600; }
+  .timeline .step .when { color: var(--text-tertiary); font-size: 11px; margin-left: 8px; }
+  .kv { display: flex; padding: 6px 0; font-size: 13px; border-bottom: 1px dashed var(--border); }
+  .kv:last-child { border: 0; }
+  .kv .k { width: 100px; color: var(--text-tertiary); flex-shrink: 0; }
+  .kv .v { flex: 1; color: var(--text); }
+  .kv .v.warn { color: var(--warn); font-weight: 700; }
+  .kv .v.danger { color: var(--danger); }
+  .pay-row {
+    display: flex; gap: 12px; padding: 8px 12px; font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .pay-row.refund { background: rgba(217,48,37,0.04); }
+  .pay-row .badge {
+    padding: 1px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+  }
+  .pay-row .badge.pay { background: rgba(43,164,74,0.12); color: var(--success); }
+  .pay-row .badge.refund { background: rgba(217,48,37,0.12); color: var(--danger); }
+  .penalty-row {
+    padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 13px;
+  }
+  .penalty-row:last-child { border: 0; }
+  .penalty-row .pmeta { color: var(--text-tertiary); font-size: 11px; margin-top: 4px; }
+
+  /* 同 orders_list */
+  .status {
+    display: inline-block; padding: 3px 10px; border-radius: 4px;
+    font-size: 12px; font-weight: 600;
+  }
+  .status-pending_pay { background: rgba(255,170,0,0.15); color: #d4a008; }
+  .status-pending_confirm { background: rgba(0,122,255,0.12); color: #0064d2; }
+  .status-accepted, .status-shooting_done { background: rgba(43,164,74,0.12); color: var(--success); }
+  .status-reviewed, .status-auto_settled, .status-settled { background: rgba(43,164,74,0.12); color: var(--success); }
+  .status-rejected, .status-user_cancelled, .status-cancelled { background: rgba(120,120,120,0.12); color: #777; }
+  .status-refunded, .status-partial_refunded { background: rgba(217,48,37,0.12); color: var(--danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if msg %}
+  <div class="flash">{{ msg }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">
+    <div>
+      订单 <span class="text-secondary" style="font-family: monospace; font-weight: 400;">{{ o.order_no }}</span>
+      <span class="status status-{{ o.status }}" style="margin-left:8px;">{{ ORDER_STATUS_LABELS.get(o.status, o.status) }}</span>
+    </div>
+    <div class="actions">
+      <a href="/admin/orders/" class="btn">返回列表</a>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="kv"><div class="k">用户</div><div class="v">
+        {% if o.user %}<a href="javascript:void(0)">{{ o.user.nickname or o.user.username }}</a>{% else %}—{% endif %}
+        {% if o.contact_phone %} · {{ o.contact_phone }}{% endif %}
+      </div></div>
+      <div class="kv"><div class="k">摄影师</div><div class="v">
+        {% if o.photographer %}
+          <a href="/admin/photographers/{{ o.photographer.id }}">{{ o.photographer.nickname }}</a>
+        {% else %}—{% endif %}
+      </div></div>
+      <div class="kv"><div class="k">套餐</div><div class="v">{{ o.package.name if o.package else '—' }}</div></div>
+      <div class="kv"><div class="k">拍摄日期</div><div class="v">{{ o.shoot_date | date }}</div></div>
+      <div class="kv"><div class="k">拍摄地点</div><div class="v">{{ o.location or '—' }}</div></div>
+      {% if o.requirements %}
+        <div class="kv"><div class="k">用户需求</div><div class="v">{{ o.requirements }}</div></div>
+      {% endif %}
+      {% if o.reject_reason %}
+        <div class="kv"><div class="k">拒单原因</div><div class="v danger">{{ o.reject_reason }}</div></div>
+      {% endif %}
+      <div class="kv"><div class="k">订单金额</div><div class="v warn">{{ o.amount_total | price }}</div></div>
+      <div class="kv"><div class="k">平台抽佣</div><div class="v">{{ o.commission | price }} ({{ o.commission_rate | pct }})</div></div>
+      <div class="kv"><div class="k">摄影师收入</div><div class="v">{{ (o.amount_total - (o.commission or 0)) | price }}</div></div>
+      {% if o.refund_amount %}
+        <div class="kv"><div class="k">已退款</div><div class="v danger">{{ o.refund_amount | price }}</div></div>
+        {% if o.refund_reason %}
+          <div class="kv"><div class="k">退款记录</div><div class="v" style="white-space: pre-line; font-size: 12px;">{{ o.refund_reason }}</div></div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <div>
+      <div class="card-title" style="font-size: 13px; margin-bottom: 12px;">流程时间线</div>
+      <div class="timeline">
+        {% for label, when in timeline %}
+        <div class="step">
+          <span class="label">{{ label }}</span>
+          <span class="when">{{ when | datetime }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 退款 -->
+<div class="card">
+  <div class="card-title">退款 / 部分退款</div>
+  {% if not o.paid_at %}
+    <div class="empty">订单尚未支付, 不可退款</div>
+  {% elif refundable == 0 %}
+    <div class="empty">本订单已全额退款</div>
+  {% else %}
+    <form method="post" action="/admin/orders/{{ o.id }}/refund" onsubmit="return confirm('确认退款 ¥' + this.amount_yuan.value + ' ?');">
+      <div class="form-row">
+        <div class="form-group" style="max-width: 160px;">
+          <label>退款金额(元) *</label>
+          <input type="number" name="amount_yuan" min="1" max="{{ refundable // 100 }}" value="{{ refundable // 100 }}" required>
+          <div class="hint">可退余额: ¥{{ '%.0f'|format(refundable / 100) }}</div>
+        </div>
+        <div class="form-group" style="max-width: 200px;">
+          <label>退款类型 *</label>
+          <select name="refund_type" required>
+            <option value="user_complaint">客诉退款</option>
+            <option value="quality_issue">质量问题</option>
+            <option value="photographer_breach">摄影师违约</option>
+            <option value="user_cancel">用户取消</option>
+            <option value="platform_issue">平台过失</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>原因 / 备注 *</label>
+          <input type="text" name="reason" required placeholder="必填, 入审计">
+        </div>
+        <div style="align-self: flex-end;">
+          <button type="submit" class="btn btn-danger">提交退款</button>
+        </div>
+      </div>
+      <div class="hint" style="margin-top: 4px;">
+        ⚠️ 当前为标记退款(只更新订单状态), 等微信支付商户号配齐后, 此处会自动调微信退款 API 真实退款给用户。
+      </div>
+    </form>
+  {% endif %}
+
+  {% if payments %}
+    <div class="mt-16">
+      <div class="text-tertiary" style="font-size:12px; margin-bottom:8px;">支付 / 退款流水</div>
+      {% for p in payments %}
+      <div class="pay-row {% if p.type == 'refund' %}refund{% endif %}">
+        <span class="badge {{ p.type }}">{{ '退款' if p.type == 'refund' else '支付' }}</span>
+        <span style="font-weight:600;">{{ p.amount | price }}</span>
+        <span class="text-tertiary">{{ p.created_at | datetime }}</span>
+        {% if p.wx_transaction_id %}
+          <span class="text-tertiary" style="font-family: monospace;">{{ p.wx_transaction_id }}</span>
+        {% endif %}
+        <span style="margin-left:auto;" class="text-tertiary">{{ p.status }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+<!-- 摄影师处罚 -->
+<div class="card">
+  <div class="card-title">对摄影师录入处罚</div>
+  <form method="post" action="/admin/orders/{{ o.id }}/penalty">
+    <div class="form-row">
+      <div class="form-group" style="max-width: 180px;">
+        <label>处罚类型 *</label>
+        <select name="type" required>
+          {% for t in PENALTY_TYPES %}
+            <option value="{{ t }}">{{ PENALTY_TYPE_LABELS.get(t, t) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="max-width: 180px;">
+        <label>严重程度 *</label>
+        <select name="severity" required>
+          {% for s in PENALTY_SEVERITIES %}
+            <option value="{{ s }}">{{ PENALTY_SEVERITY_LABELS.get(s, s) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="max-width: 140px;">
+        <label>罚款金额(元)</label>
+        <input type="number" name="fine_amount_yuan" min="0" value="0">
+      </div>
+      <div class="form-group">
+        <label>详细说明</label>
+        <input type="text" name="notes" placeholder="客诉内容 / 处罚原因">
+      </div>
+      <div style="align-self: flex-end;">
+        <button class="btn btn-danger">录入处罚</button>
+      </div>
+    </div>
+    <div class="hint">⚠️ 严重程度选择 暂停 / 永久封禁 时, 摄影师会被自动下架。</div>
+  </form>
+
+  {% if penalties %}
+    <div class="mt-16">
+      <div class="text-tertiary" style="font-size:12px; margin-bottom:8px;">本订单关联处罚记录</div>
+      {% for p in penalties %}
+      <div class="penalty-row">
+        <span class="status status-{{ 'refunded' if p.severity in ('fine', 'ban', 'suspend') else 'pending_pay' }}">
+          {{ PENALTY_TYPE_LABELS.get(p.type, p.type) }} · {{ PENALTY_SEVERITY_LABELS.get(p.severity, p.severity) }}
+        </span>
+        {% if p.fine_amount %}
+          <span class="warn" style="margin-left:8px; font-weight:700; color: var(--danger);">罚 {{ p.fine_amount | price }}</span>
+        {% endif %}
+        {% if p.notes %}
+          <div style="margin-top:4px;">{{ p.notes }}</div>
+        {% endif %}
+        <div class="pmeta">{{ p.created_at | datetime }} · 操作人 {{ p.operator_id or '系统' }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

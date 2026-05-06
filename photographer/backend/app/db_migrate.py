@@ -22,12 +22,19 @@ SCHEMA_UPDATES: dict[str, list[tuple[str, str]]] = {
         ("photographer_agreement_version", "VARCHAR(20)"),
         ("service_commitment_version", "VARCHAR(20)"),
         ("agreements_accepted_at", "DATETIME"),
+        ("commission_rate", "FLOAT"),
+    ],
+    "pm_packages": [
+        ("commission_rate", "FLOAT"),
     ],
     "pm_orders": [
         ("delivery_password", "VARCHAR(50)"),
         ("delivery_preview_images", "TEXT"),
         ("delivery_note", "VARCHAR(500)"),
         ("delivery_at", "DATETIME"),
+        ("refund_amount", "INTEGER DEFAULT 0"),
+        ("refund_reason", "VARCHAR(500)"),
+        ("refunded_at", "DATETIME"),
     ],
 }
 
