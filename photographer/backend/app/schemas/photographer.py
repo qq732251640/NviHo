@@ -129,6 +129,9 @@ class PhotographerApply(BaseModel):
     external_portfolio_url: str | None = None
     category_ids: List[int] = []
     years_of_experience: int = 1
+    # 入驻必须同时接受这两份协议
+    accept_photographer_agreement: bool
+    accept_service_commitment: bool
 
 
 class PhotographerUpdate(BaseModel):

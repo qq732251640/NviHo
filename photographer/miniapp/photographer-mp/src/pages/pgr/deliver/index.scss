@@ -1,0 +1,138 @@
+.deliver-page {
+  padding-bottom: 200px;
+}
+
+.loading {
+  text-align: center;
+  padding: 200px 0;
+  color: var(--color-text-tertiary);
+}
+
+.card {
+  background: #fff;
+  margin-top: 16px;
+  padding: 24px 32px;
+
+  .card-title {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .card-body {
+    font-size: 28px;
+  }
+  .card-meta {
+    font-size: 24px;
+    color: var(--color-text-tertiary);
+    margin-top: 4px;
+  }
+
+  .hint {
+    font-size: 22px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+
+  .warn {
+    color: var(--color-warn);
+    font-size: 26px;
+    text-align: center;
+    padding: 32px 0;
+  }
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.image-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f0f0f0;
+
+  .thumb {
+    width: 100%;
+    height: 100%;
+  }
+
+  .remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+
+  &.add {
+    border: 2px dashed var(--color-border);
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    .plus {
+      font-size: 60px;
+      color: var(--color-text-tertiary);
+      line-height: 1;
+    }
+    .add-label {
+      margin-top: 8px;
+      font-size: 22px;
+      color: var(--color-text-tertiary);
+    }
+
+    &.disabled {
+      opacity: 0.5;
+    }
+  }
+}
+
+.input,
+.textarea {
+  width: 100%;
+  font-size: 28px;
+  padding: 12px 0;
+}
+
+.textarea {
+  min-height: 160px;
+}
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid var(--color-border);
+  padding: 16px 24px;
+
+  .submit-btn {
+    height: 88px;
+    border-radius: 44px;
+    background: var(--color-accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: 600;
+
+    &.disabled {
+      opacity: 0.6;
+    }
+  }
+}

@@ -3,21 +3,39 @@ import Taro from '@tarojs/taro';
 import { Input, Text, View } from '@tarojs/components';
 
 import { devLogin, getMe, wxLogin } from '@/api/auth';
+import { acceptUserAgreement } from '@/api/agreements';
 import { useUserStore } from '@/stores/user';
 import './index.scss';
+
+const USER_AGREEMENT_VERSION = 'v1.0';
 
 export default function LoginPage() {
   const { setUser } = useUserStore();
   const [username, setUsername] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const finishLogin = async () => {
+    try {
+      await acceptUserAgreement(USER_AGREEMENT_VERSION);
+    } catch (e) {
+      // 协议接受失败不阻塞登录,但应在合适时机重试
+    }
     const me = await getMe();
     setUser(me);
     Taro.navigateBack();
   };
 
+  const ensureAgreed = (): boolean => {
+    if (!agreed) {
+      Taro.showToast({ title: '请先勾选用户协议', icon: 'none' });
+      return false;
+    }
+    return true;
+  };
+
   const onWxLogin = async () => {
+    if (!ensureAgreed()) return;
     setSubmitting(true);
     try {
       const res = await Taro.login();
@@ -44,6 +62,7 @@ export default function LoginPage() {
       Taro.showToast({ title: '请填写用户名', icon: 'none' });
       return;
     }
+    if (!ensureAgreed()) return;
     setSubmitting(true);
     try {
       const token = await devLogin(username.trim());
@@ -61,6 +80,25 @@ export default function LoginPage() {
       <View className="hero">
         <View className="title">约拍 · 太原</View>
         <View className="sub">挑摄影师 · 看排期 · 一键预约</View>
+      </View>
+
+      <View
+        className={`agreement-check ${agreed ? 'active' : ''}`}
+        onClick={() => setAgreed((s) => !s)}
+      >
+        <View className={`box ${agreed ? 'checked' : ''}`}>{agreed ? '✓' : ''}</View>
+        <Text className="text">
+          我已阅读并同意{' '}
+          <Text
+            className="link"
+            onClick={(e: any) => {
+              e.stopPropagation && e.stopPropagation();
+              Taro.navigateTo({ url: '/pages/agreement/index?type=user' });
+            }}
+          >
+            《用户协议》
+          </Text>
+        </Text>
       </View>
 
       <View className="primary-btn" onClick={onWxLogin}>

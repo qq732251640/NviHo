@@ -1,0 +1,133 @@
+.apply-page {
+  padding-bottom: 200px;
+}
+
+.card {
+  background: #fff;
+  margin-top: 16px;
+  padding: 24px 32px;
+
+  .card-title {
+    font-size: 30px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+}
+
+.form-item {
+  margin-bottom: 16px;
+
+  .lbl {
+    display: block;
+    font-size: 24px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 8px;
+  }
+
+  .ipt {
+    background: var(--color-bg-soft);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 28px;
+  }
+
+  .txa {
+    background: var(--color-bg-soft);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 26px;
+    width: 100%;
+    min-height: 160px;
+  }
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+
+  .flex-1 {
+    flex: 1;
+  }
+}
+
+.cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+
+  .cat {
+    padding: 12px 24px;
+    border: 1px solid var(--color-border);
+    border-radius: 32px;
+    font-size: 26px;
+    color: var(--color-text-secondary);
+
+    &.active {
+      border-color: var(--color-accent);
+      background: rgba(200, 155, 106, 0.08);
+      color: var(--color-accent);
+    }
+  }
+}
+
+.agreements {
+  .agreement-row {
+    display: flex;
+    align-items: center;
+    padding: 16px 0;
+
+    .box {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 16px;
+      font-size: 24px;
+      color: #fff;
+
+      &.checked {
+        background: var(--color-accent);
+        border-color: var(--color-accent);
+      }
+    }
+
+    .text {
+      font-size: 26px;
+      color: var(--color-text-secondary);
+      flex: 1;
+    }
+
+    .link {
+      color: var(--color-accent);
+    }
+  }
+}
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid var(--color-border);
+  padding: 16px 24px;
+
+  .submit {
+    height: 88px;
+    border-radius: 44px;
+    background: var(--color-accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30px;
+    font-weight: 600;
+
+    &.disabled {
+      opacity: 0.5;
+    }
+  }
+}

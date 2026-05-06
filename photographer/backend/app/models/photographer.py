@@ -51,6 +51,11 @@ class Photographer(Base):
     status = Column(String(20), default="pending", comment="pending/approved/frozen")
     starting_price = Column(Integer, default=0, comment="冗余字段:起拍价(元),用于列表页快速展示")
 
+    # 协议接受记录(摄影师入驻协议 + 服务承诺书)
+    photographer_agreement_version = Column(String(20), nullable=True, comment="已接受的入驻协议版本号")
+    service_commitment_version = Column(String(20), nullable=True, comment="已接受的服务承诺书版本号")
+    agreements_accepted_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

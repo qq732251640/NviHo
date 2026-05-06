@@ -97,12 +97,28 @@ export interface OrderDetail extends OrderListItem {
   commission: number;
   commission_rate: number;
   reject_reason?: string;
-  delivery_url?: string;
+
+  // 交付信息
+  delivery_preview_images?: string[];
+  delivery_url?: string;       // 用户视角:确认收片后才有
+  delivery_password?: string;  // 用户视角:确认收片后才有
+  delivery_note?: string;
+  delivery_at?: string;
+  delivery_unlocked?: boolean; // 是否已经解锁(展示链接)
+
   paid_at?: string;
   accepted_at?: string;
   completed_at?: string;
   confirmed_at?: string;
   settled_at?: string;
+}
+
+export interface AgreementContent {
+  type: 'user' | 'photographer' | 'service_commitment';
+  title: string;
+  version: string;
+  content_md: string;
+  effective_date: string;
 }
 
 export interface UserInfo {

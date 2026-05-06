@@ -18,6 +18,10 @@ class User(Base):
     pm_phone = Column(String(20), nullable=True)
     pm_city = Column(String(50), nullable=True, default="太原")
 
+    # 协议接受记录(用户协议)
+    user_agreement_version = Column(String(20), nullable=True, comment="已接受的用户协议版本号")
+    user_agreement_accepted_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

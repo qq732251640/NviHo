@@ -53,7 +53,14 @@ class Order(Base):
 
     status = Column(String(30), default=OrderStatus.PENDING_PAY.value, index=True)
     reject_reason = Column(String(200), nullable=True)
-    delivery_url = Column(String(500), nullable=True, comment="成片打包下载/相册链接")
+
+    # 交付信息(摄影师上传成片时填写)
+    # 用户在 confirmed/auto_settled/reviewed/settled 之前看不到 delivery_url 和 delivery_password
+    delivery_url = Column(String(500), nullable=True, comment="百度云原片下载链接")
+    delivery_password = Column(String(50), nullable=True, comment="百度云提取码")
+    delivery_preview_images = Column(Text, nullable=True, comment="水印预览图 URL 数组(JSON)")
+    delivery_note = Column(String(500), nullable=True, comment="摄影师交付备注")
+    delivery_at = Column(DateTime, nullable=True, comment="交付提交时间")
 
     created_at = Column(DateTime, server_default=func.now())
     paid_at = Column(DateTime, nullable=True)

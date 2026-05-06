@@ -19,6 +19,40 @@
   }
 }
 
+.agreement-check {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 8px 0;
+
+  .box {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 16px;
+    font-size: 24px;
+    color: #fff;
+
+    &.checked {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+    }
+  }
+
+  .text {
+    font-size: 24px;
+    color: var(--color-text-secondary);
+  }
+
+  .link {
+    color: var(--color-accent);
+  }
+}
+
 .primary-btn {
   height: 96px;
   border-radius: 48px;

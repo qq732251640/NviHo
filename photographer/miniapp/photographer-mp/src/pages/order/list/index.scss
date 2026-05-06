@@ -3,6 +3,13 @@
   padding-bottom: 32px;
 }
 
+.role-banner {
+  background: var(--color-bg-dark);
+  color: var(--color-accent);
+  padding: 12px 32px;
+  font-size: 24px;
+}
+
 .tabs {
   display: flex;
   background: #fff;

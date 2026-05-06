@@ -11,6 +11,13 @@ export interface CreateOrderRequest {
   contact_phone?: string;
 }
 
+export interface DeliverOrderRequest {
+  preview_images: string[];
+  delivery_url: string;
+  delivery_password?: string;
+  delivery_note?: string;
+}
+
 export interface PrepayResponse {
   timeStamp: string;
   nonceStr: string;
@@ -51,4 +58,21 @@ export const reviewOrder = (
     url: `/orders/${orderId}/review`,
     method: 'POST',
     data,
+  });
+
+export const deliverOrder = (orderId: number, data: DeliverOrderRequest) =>
+  request<OrderDetail>({
+    url: `/orders/${orderId}/deliver`,
+    method: 'POST',
+    data,
+  });
+
+export const acceptOrderByPgr = (orderId: number) =>
+  request<OrderDetail>({ url: `/orders/${orderId}/accept`, method: 'POST' });
+
+export const rejectOrderByPgr = (orderId: number, reason?: string) =>
+  request<OrderDetail>({
+    url: `/orders/${orderId}/reject`,
+    method: 'POST',
+    data: { reason },
   });

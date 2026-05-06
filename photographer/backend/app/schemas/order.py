@@ -17,6 +17,15 @@ class OrderRejectRequest(BaseModel):
     reason: str | None = None
 
 
+class OrderDeliverRequest(BaseModel):
+    """摄影师上传成片(原 complete 接口的请求体, 升级版)。"""
+    preview_images: list[str]
+    delivery_url: str
+    delivery_password: str | None = None
+    delivery_note: str | None = None
+
+
+# 兼容旧字段名(逐步废弃)
 class OrderCompleteRequest(BaseModel):
     delivery_url: str | None = None
 
@@ -67,7 +76,15 @@ class OrderDetail(BaseModel):
     commission_rate: float
     status: str
     reject_reason: str | None = None
-    delivery_url: str | None = None
+
+    # 交付信息: API 层根据状态决定哪些字段返回
+    delivery_preview_images: list[str] | None = None  # 始终返回(展示水印预览)
+    delivery_url: str | None = None                   # 用户视角:仅在 reviewed/auto_settled/settled 后返回
+    delivery_password: str | None = None              # 用户视角:仅在 reviewed/auto_settled/settled 后返回
+    delivery_note: str | None = None
+    delivery_at: datetime | None = None
+    delivery_unlocked: bool = False                   # 前端用,判断是否已经解锁链接
+
     created_at: datetime
     paid_at: datetime | None = None
     accepted_at: datetime | None = None

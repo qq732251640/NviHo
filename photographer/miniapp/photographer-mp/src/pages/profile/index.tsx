@@ -72,17 +72,41 @@ export default function ProfilePage() {
           className="menu-item"
           onClick={() => Taro.switchTab({ url: '/pages/order/list/index' })}
         >
-          <Text>📋 我的订单</Text>
+          <Text>📋 我的订单(下单)</Text>
           <Text className="arrow">›</Text>
         </View>
+        {user && (user.pm_role === 'photographer' || user.pm_role === 'both' || user.pm_role === 'admin') && (
+          <View
+            className="menu-item"
+            onClick={() =>
+              Taro.navigateTo({ url: '/pages/order/list/index?role=photographer' })
+            }
+          >
+            <Text>📷 我接的单(摄影师)</Text>
+            <Text className="arrow">›</Text>
+          </View>
+        )}
         <View
           className="menu-item"
           onClick={() => {
             if (!user) onLogin();
-            else Taro.showToast({ title: '摄影师入驻待开放', icon: 'none' });
+            else if (user.pm_role === 'user') {
+              Taro.navigateTo({ url: '/pages/pgr/apply/index' });
+            } else {
+              Taro.showToast({ title: '已是摄影师', icon: 'none' });
+            }
           }}
         >
           <Text>📷 申请成为摄影师</Text>
+          <Text className="arrow">›</Text>
+        </View>
+        <View
+          className="menu-item"
+          onClick={() =>
+            Taro.navigateTo({ url: '/pages/agreement/index?type=user' })
+          }
+        >
+          <Text>📜 用户协议</Text>
           <Text className="arrow">›</Text>
         </View>
         <View

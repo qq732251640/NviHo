@@ -13,6 +13,10 @@ from app.models.photographer import Photographer
 from app.models.schedule import Schedule
 from app.models.user import User
 from app.models.work import Work
+from app.schemas.agreement import (
+    CURRENT_PHOTOGRAPHER_AGREEMENT_VERSION,
+    CURRENT_SERVICE_COMMITMENT_VERSION,
+)
 from app.schemas.common import IdResponse, OkResponse
 from app.schemas.photographer import (
     PackageCreate,
@@ -53,6 +57,11 @@ def apply(
 ):
     if current_user.photographer:
         raise HTTPException(status_code=400, detail="已申请入驻,请勿重复提交")
+    if not (data.accept_photographer_agreement and data.accept_service_commitment):
+        raise HTTPException(
+            status_code=400,
+            detail="必须同时接受《摄影师入驻协议》和《服务承诺书》方可入驻",
+        )
 
     pgr = Photographer(
         user_id=current_user.id,
@@ -67,6 +76,9 @@ def apply(
         contact_wechat=data.contact_wechat,
         external_portfolio_url=data.external_portfolio_url,
         status="pending",
+        photographer_agreement_version=CURRENT_PHOTOGRAPHER_AGREEMENT_VERSION,
+        service_commitment_version=CURRENT_SERVICE_COMMITMENT_VERSION,
+        agreements_accepted_at=datetime.utcnow(),
     )
     if data.category_ids:
         cats = db.query(Category).filter(Category.id.in_(data.category_ids)).all()

@@ -9,6 +9,9 @@ export default defineAppConfig({
     'pages/order/review/index',
     'pages/profile/index',
     'pages/login/index',
+    'pages/agreement/index',
+    'pages/pgr/apply/index',
+    'pages/pgr/deliver/index',
   ],
   window: {
     backgroundTextStyle: 'light',

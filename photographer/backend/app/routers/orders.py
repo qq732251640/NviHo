@@ -19,6 +19,7 @@ from app.schemas.common import OkResponse
 from app.schemas.order import (
     OrderCompleteRequest,
     OrderCreate,
+    OrderDeliverRequest,
     OrderDetail,
     OrderListItem,
     OrderRejectRequest,
@@ -48,13 +49,21 @@ def _to_list_item(o: Order) -> OrderListItem:
     )
 
 
+DELIVERY_UNLOCKED_STATUSES = {
+    OrderStatus.REVIEWED.value,
+    OrderStatus.AUTO_SETTLED.value,
+    OrderStatus.SETTLED.value,
+}
+
+
 def _to_detail(o: Order, viewer: User) -> OrderDetail:
     is_photographer = (
         o.photographer
         and o.photographer.user_id == viewer.id
     )
     is_buyer = o.user_id == viewer.id
-    if not (is_photographer or is_buyer or viewer.pm_role == "admin"):
+    is_admin = viewer.pm_role == "admin"
+    if not (is_photographer or is_buyer or is_admin):
         raise HTTPException(status_code=403, detail="无权查看此订单")
 
     pgr_phone = None
@@ -66,6 +75,25 @@ def _to_detail(o: Order, viewer: User) -> OrderDetail:
         OrderStatus.SETTLED.value,
     ):
         pgr_phone = o.photographer.contact_phone if o.photographer else None
+
+    # 解析 delivery_preview_images JSON
+    preview_images: list[str] = []
+    if o.delivery_preview_images:
+        try:
+            preview_images = json.loads(o.delivery_preview_images)
+        except Exception:
+            preview_images = []
+
+    # 决定 delivery_url / delivery_password 是否对调用方可见
+    # 摄影师本人和管理员: 总是可见
+    # 用户(买家): 只在订单进入 reviewed/auto_settled/settled 后可见
+    delivery_unlocked = (
+        is_photographer
+        or is_admin
+        or o.status in DELIVERY_UNLOCKED_STATUSES
+    )
+    delivery_url = o.delivery_url if delivery_unlocked else None
+    delivery_password = o.delivery_password if delivery_unlocked else None
 
     return OrderDetail(
         id=o.id,
@@ -89,7 +117,12 @@ def _to_detail(o: Order, viewer: User) -> OrderDetail:
         commission_rate=o.commission_rate,
         status=o.status,
         reject_reason=o.reject_reason,
-        delivery_url=o.delivery_url,
+        delivery_preview_images=preview_images,
+        delivery_url=delivery_url,
+        delivery_password=delivery_password,
+        delivery_note=o.delivery_note,
+        delivery_at=o.delivery_at,
+        delivery_unlocked=bool(delivery_unlocked and o.delivery_url),
         created_at=o.created_at,
         paid_at=o.paid_at,
         accepted_at=o.accepted_at,
@@ -291,26 +324,68 @@ def reject_order(
     return _to_detail(o, current_user)
 
 
-@router.post("/{order_id}/complete", response_model=OrderDetail)
+def _do_deliver(
+    o: Order,
+    data: OrderDeliverRequest,
+    db: Session,
+    current_user: User,
+) -> Order:
+    if not (current_user.photographer and o.photographer_id == current_user.photographer.id):
+        raise HTTPException(status_code=403, detail="只有接单摄影师可以交付成片")
+    if o.status != OrderStatus.ACCEPTED.value:
+        raise HTTPException(status_code=400, detail="订单状态不允许交付")
+    if not data.preview_images:
+        raise HTTPException(status_code=400, detail="至少上传 1 张水印预览图")
+    if not data.delivery_url or not data.delivery_url.strip():
+        raise HTTPException(status_code=400, detail="请填写百度云链接")
+
+    o.status = OrderStatus.SHOOTING_DONE.value
+    o.completed_at = datetime.utcnow()
+    o.delivery_at = datetime.utcnow()
+    o.delivery_url = data.delivery_url.strip()
+    o.delivery_password = (data.delivery_password or "").strip() or None
+    o.delivery_note = (data.delivery_note or "").strip() or None
+    o.delivery_preview_images = json.dumps(data.preview_images, ensure_ascii=False)
+    db.commit()
+    db.refresh(o)
+    return o
+
+
+@router.post("/{order_id}/deliver", response_model=OrderDetail)
+def deliver_order(
+    order_id: int,
+    data: OrderDeliverRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """摄影师上传成片(预览图 + 百度云链接 + 提取码 + 备注)。
+
+    用户在订单详情页可以看到预览图,但 delivery_url 和 delivery_password
+    在用户确认收片或评价之前会被 API 层屏蔽。
+    """
+    o = db.query(Order).filter(Order.id == order_id).first()
+    if not o:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    o = _do_deliver(o, data, db, current_user)
+    return _to_detail(o, current_user)
+
+
+@router.post("/{order_id}/complete", response_model=OrderDetail, deprecated=True)
 def complete_order(
     order_id: int,
     data: OrderCompleteRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """旧版仅含 delivery_url 的接口,保留兼容。新代码请用 /deliver。"""
     o = db.query(Order).filter(Order.id == order_id).first()
     if not o:
         raise HTTPException(status_code=404, detail="订单不存在")
-    if not (current_user.photographer and o.photographer_id == current_user.photographer.id):
-        raise HTTPException(status_code=403, detail="只有接单摄影师可以标记完成")
-    if o.status != OrderStatus.ACCEPTED.value:
-        raise HTTPException(status_code=400, detail="订单状态不允许标记完成")
-    o.status = OrderStatus.SHOOTING_DONE.value
-    o.completed_at = datetime.utcnow()
-    if data.delivery_url:
-        o.delivery_url = data.delivery_url
-    db.commit()
-    db.refresh(o)
+    deliver_data = OrderDeliverRequest(
+        preview_images=[],
+        delivery_url=data.delivery_url or "",
+    )
+    o = _do_deliver(o, deliver_data, db, current_user)
     return _to_detail(o, current_user)
 
 
